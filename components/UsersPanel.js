@@ -40,4 +40,3 @@ export default function UsersPanel({ t, onClose }) {
     </section>
   </div>;
 }
-

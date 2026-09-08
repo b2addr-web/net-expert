@@ -193,4 +193,3 @@ create policy "audit_authenticated_insert" on audit_log for insert to authentica
 create policy "purchases_admin_access" on purchases for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "expenses_admin_access" on expenses for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "financial_assets_admin_access" on assets for all to authenticated using (public.is_admin()) with check (public.is_admin());
-
