@@ -1,116 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from './AuthContext';
 
-const capabilities = [
-  { en: 'Managed Assets', ar: 'إدارة الأصول' },
-  { en: 'Active Contracts', ar: 'العقود والتغطية' },
-  { en: 'Maintenance Tasks', ar: 'أعمال الصيانة' },
-];
+const capabilities=[{en:'Asset visibility',ar:'رؤية موحدة للأصول'},{en:'Operational control',ar:'ضبط العمليات'},{en:'Lifecycle governance',ar:'حوكمة دورة الحياة'}];
+function ProductMark(){return <span className="login-product-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 7.5 12 3.5l7 4v8l-7 4-7-4v-8Z"/><path d="m5 7.5 7 4 7-4M12 11.5v8"/></svg></span>}
 
-function ProductMark() {
-  return <span className="login-product-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 7.5 12 3.5l7 4v8l-7 4-7-4v-8Z"/><path d="m5 7.5 7 4 7-4M12 11.5v8"/></svg></span>;
+export default function LoginPage({t}){
+ const auth=useAuth(),ar=t.dir==='rtl';
+ const [mode,setMode]=useState(auth.recoveryMode?'newPassword':'login'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[fullName,setFullName]=useState(''),[remember,setRemember]=useState(true),[loading,setLoading]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+ const copy={login:[ar?'تسجيل الدخول':'Sign in',ar?'استخدم حساب Net Expert الخاص بمؤسستك.':'Use your organization Net Expert account.'],signup:[ar?'إنشاء حساب':'Create account',ar?'يبدأ الحساب الجديد بصلاحية مشاهد.':'New accounts start with Viewer access.'],forgot:[ar?'استعادة الحساب':'Recover account',ar?'سنرسل رابطاً آمناً لتعيين كلمة مرور جديدة.':'We will send a secure link to set a new password.'],activation:[ar?'إعادة إرسال التفعيل':'Resend activation',ar?'أدخل بريد الحساب لإرسال رابط تفعيل جديد.':'Enter your account email to receive a new activation link.'],newPassword:[ar?'كلمة مرور جديدة':'Set a new password',ar?'اختر كلمة مرور قوية لحسابك.':'Choose a strong password for your account.']};
+ const go=next=>{setMode(next);setError('');setMessage('');setPassword('');setConfirm('')};
+ const friendly=e=>{if(e?.message==='ACCOUNT_SUSPENDED')return ar?'الحساب موقوف. تواصل مع مسؤول النظام.':'This account is suspended. Contact your administrator.';if(e?.status===429)return ar?'محاولات كثيرة. انتظر قليلاً ثم حاول مجدداً.':'Too many attempts. Please wait and try again.';return ar?'تعذر إكمال الطلب. تحقق من البيانات وحاول مجدداً.':'We could not complete the request. Check your details and try again.'};
+ const submit=async e=>{e.preventDefault();setLoading(true);setError('');setMessage('');try{const normalized=email.trim().toLowerCase();if(mode==='login')await auth.login(normalized,password,remember);if(mode==='signup'){if(password.length<8)throw new Error('SHORT');if(password!==confirm)throw new Error('MATCH');const result=await auth.signUp({fullName:fullName.trim(),email:normalized,password});if(result.confirmationRequired){setMode('sent');setMessage(ar?'أرسلنا رابط التفعيل إلى بريدك. افتح الرسالة لتفعيل الحساب ثم سجل الدخول.':'We sent an activation link to your email. Activate your account, then sign in.')}}if(mode==='forgot'){await auth.requestPasswordReset(normalized);setMode('sent');setMessage(ar?'أرسلنا رابط استعادة الحساب إذا كان البريد مسجلاً.':'If the email is registered, a recovery link has been sent.')}if(mode==='activation'){await auth.resendActivation(normalized);setMode('sent');setMessage(ar?'تم إرسال رابط تفعيل جديد.':'A new activation link has been sent.')}if(mode==='newPassword'){if(password.length<8)throw new Error('SHORT');if(password!==confirm)throw new Error('MATCH');await auth.updatePassword(password);setMode('login');setMessage(ar?'تم تحديث كلمة المرور. يمكنك المتابعة الآن.':'Your password has been updated. You can continue now.')}}catch(ex){setError(ex.message==='SHORT'?(ar?'استخدم 8 أحرف على الأقل.':'Use at least 8 characters.'):ex.message==='MATCH'?(ar?'كلمتا المرور غير متطابقتين.':'Passwords do not match.'):friendly(ex))}finally{setLoading(false)}};
+ const title=mode==='sent'?(ar?'تحقق من بريدك':'Check your email'):(copy[mode]||copy.login)[0],desc=mode==='sent'?message:(copy[mode]||copy.login)[1];
+ return <main className="login-shell" dir="ltr"><section className="login-product" dir={t.dir}><div className="login-product-inner"><header className="login-brand"><ProductMark/><span>Net Expert</span></header><div className="login-proposition"><p className="login-eyebrow">ENTERPRISE ASSET OPERATIONS</p><h1>Net Expert</h1><p className="login-subtitle">Asset Operations Platform</p><p className="login-description">{ar?'مساحة موحدة لإدارة الأصول التقنية ومسؤولياتها عبر المؤسسة.':'A unified workspace for technology assets and operational accountability.'}</p></div><ul className="login-capabilities">{capabilities.map((x,i)=><li key={x.en}><span>0{i+1}</span>{ar?x.ar:x.en}</li>)}</ul><footer className="login-product-footer"><span>{ar?'مساحة عمل مؤسسية':'Enterprise workspace'}</span><span>{ar?'وصول موثوق ومحكوم':'Trusted, governed access'}</span></footer></div></section>
+ <section className="login-access" dir={t.dir}><div className="login-access-inner"><div className="login-mobile-brand"><ProductMark/><span>Net Expert</span></div><div className="login-card"><div className="login-heading"><p className="login-step-label">{ar?'حساب NET EXPERT':'NET EXPERT ACCOUNT'}</p><h2>{title}</h2><p>{desc}</p></div>
+ {mode==='sent'?<div className="login-sent"><span>✓</span><button className="login-submit" onClick={()=>go('login')}>{ar?'العودة لتسجيل الدخول':'Back to sign in'}</button></div>:<form onSubmit={submit} noValidate>{mode==='signup'&&<div className="login-field"><label htmlFor="full-name">{ar?'الاسم الكامل':'Full name'}</label><input id="full-name" value={fullName} onChange={e=>setFullName(e.target.value)} autoComplete="name" required autoFocus/></div>}{mode!=='newPassword'&&<div className="login-field"><label htmlFor="email">{ar?'البريد الإلكتروني':'Email address'}</label><input id="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="name@company.com" required autoFocus={mode!=='signup'}/></div>}{(mode==='login'||mode==='signup'||mode==='newPassword')&&<><div className="login-field"><label htmlFor="password">{mode==='newPassword'?(ar?'كلمة المرور الجديدة':'New password'):(ar?'كلمة المرور':'Password')}</label><input id="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='login'?'current-password':'new-password'} required/></div>{(mode==='signup'||mode==='newPassword')&&<div className="login-field"><label htmlFor="confirm-password">{ar?'تأكيد كلمة المرور':'Confirm password'}</label><input id="confirm-password" type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" required/></div>}</>}{mode==='login'&&<div className="login-options"><label className="login-remember"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span>{ar?'تذكرني':'Remember me'}</span></label><button type="button" onClick={()=>go('forgot')}>{ar?'نسيت كلمة المرور؟':'Forgot password?'}</button></div>}{error&&<div className="login-error" role="alert">{error}</div>}{message&&<div className="login-success" role="status">{message}</div>}<button className="login-submit" type="submit" disabled={loading||(mode!=='newPassword'&&!email.includes('@'))}>{loading?(ar?'جارٍ المتابعة…':'Please wait…'):mode==='login'?(ar?'تسجيل الدخول':'Sign in'):mode==='signup'?(ar?'إنشاء الحساب':'Create account'):mode==='newPassword'?(ar?'حفظ كلمة المرور':'Save password'):(ar?'إرسال الرابط':'Send link')}</button></form>}
+ {mode==='login'&&<div className="login-secondary-actions"><button onClick={()=>go('signup')}>{ar?'إنشاء حساب جديد':'Create an account'}</button><button onClick={()=>go('activation')}>{ar?'إعادة إرسال رابط التفعيل':'Resend activation link'}</button></div>}{mode!=='login'&&mode!=='sent'&&<button className="login-back" onClick={()=>go('login')}>{ar?'العودة إلى تسجيل الدخول':'Back to sign in'}</button>}<p className="login-support">{ar?'الوصول محمي وفق سياسات حساب Net Expert.':'Access is protected by your Net Expert account policies.'}</p></div><footer className="login-access-footer"><span>© {new Date().getFullYear()} Net Expert</span><span>{ar?'الخصوصية والأمان':'Privacy & security'}</span></footer></div></section></main>;
 }
 
-function formatTime(seconds) {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
-export default function LoginPage({ t }) {
-  const { requestOtp, verifyOtp, configured } = useAuth();
-  const [step, setStep] = useState('email');
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [remember, setRemember] = useState(true);
-  const [seconds, setSeconds] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const isAr = t.dir === 'rtl';
-
-  useEffect(() => {
-    if (!seconds) return undefined;
-    const timer = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
-    return () => window.clearInterval(timer);
-  }, [seconds]);
-
-  const messageFor = (exception) => {
-    if (exception?.message === 'AUTH_NOT_CONFIGURED') return isAr ? 'لم يتم إعداد خدمة تسجيل الدخول بعد.' : 'Authentication has not been configured.';
-    if (exception?.status === 429) return isAr ? 'طلبات كثيرة. انتظر قليلًا ثم حاول مجددًا.' : 'Too many attempts. Wait before trying again.';
-    return isAr ? 'تعذر إكمال الطلب. تحقق من البيانات وحاول مجددًا.' : 'We could not complete the request. Check your details and try again.';
-  };
-
-  const sendCode = async (event) => {
-    event?.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      await requestOtp(email.trim().toLowerCase(), remember);
-      setStep('otp');
-      setOtp('');
-      setSeconds(60);
-    } catch (exception) {
-      setError(messageFor(exception));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const confirmCode = async (event) => {
-    event.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      await verifyOtp(email.trim().toLowerCase(), otp);
-    } catch (exception) {
-      setError(messageFor(exception));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return <main className="login-shell" dir="ltr">
-    <section className="login-product" dir={t.dir} aria-labelledby="product-title">
-      <div className="login-product-inner">
-        <header className="login-brand"><ProductMark/><span>Net Expert</span></header>
-        <div className="login-proposition">
-          <p className="login-eyebrow">ENTERPRISE ASSET OPERATIONS</p>
-          <h1 id="product-title">Net Expert</h1>
-          <p className="login-subtitle">Asset Operations Platform</p>
-          <p className="login-description">{isAr?'مساحة موحدة لإدارة دورة حياة الأصول التقنية والعقود وأعمال الصيانة عبر المؤسسة.':'One operational system for technology assets, contracts, and maintenance across your organization.'}</p>
-        </div>
-        <ul className="login-capabilities" aria-label={isAr?'قدرات المنصة':'Platform capabilities'}>
-          {capabilities.map((item,index)=><li key={item.en}><span>0{index+1}</span>{isAr?item.ar:item.en}</li>)}
-        </ul>
-        <footer className="login-product-footer"><span>{isAr?'بيئة المؤسسة':'Enterprise workspace'}</span><span>{isAr?'وصول آمن بدون كلمة مرور':'Secure passwordless access'}</span></footer>
-      </div>
-    </section>
-
-    <section className="login-access" dir={t.dir} aria-labelledby="login-title">
-      <div className="login-access-inner">
-        <div className="login-mobile-brand"><ProductMark/><span>Net Expert</span></div>
-        <div className="login-card">
-          <div className="login-heading">
-            <p className="login-step-label">{isAr?'حساب المؤسسة':'ORGANIZATION ACCOUNT'}</p>
-            <h2 id="login-title">{step==='email'?(isAr?'تسجيل الدخول':'Sign in'):(isAr?'تحقق من بريدك':'Check your email')}</h2>
-            <p>{step==='email'?(isAr?'أدخل بريد العمل وسنرسل إليك رمز تحقق لمرة واحدة.':'Enter your work email and we will send a one-time verification code.'):(isAr?`أرسلنا رمزًا إلى ${email}`:`We sent a verification code to ${email}`)}</p>
-          </div>
-
-          {step==='email'?<form onSubmit={sendCode} noValidate>
-            <div className="login-field"><label htmlFor="email">{isAr?'البريد الإلكتروني للعمل':'Work email'}</label><input id="email" type="email" inputMode="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" placeholder="name@company.com" autoFocus required/></div>
-            <label className="login-remember"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span>{isAr?'تذكر هذا الجهاز':'Remember this device'}</span></label>
-            {error&&<div className="login-error" role="alert">{error}</div>}
-            <button className="login-submit" type="submit" disabled={loading||!email.includes('@')}>{loading?(isAr?'جارٍ إرسال الرمز…':'Sending code…'):(isAr?'متابعة':'Continue')}</button>
-          </form>:<form onSubmit={confirmCode} noValidate>
-            <div className="login-field"><label htmlFor="otp">{isAr?'رمز التحقق':'Verification code'}</label><input id="otp" className="login-otp" inputMode="numeric" autoComplete="one-time-code" maxLength="6" value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="000000" autoFocus required/></div>
-            <div className="login-code-actions"><button type="button" onClick={()=>{setStep('email');setError('')}}>{isAr?'تغيير البريد':'Change email'}</button><span>{seconds?`${isAr?'إعادة الإرسال خلال':'Resend in'} ${formatTime(seconds)}`:<button type="button" onClick={sendCode} disabled={loading}>{isAr?'إرسال رمز جديد':'Send new code'}</button>}</span></div>
-            {error&&<div className="login-error" role="alert">{error}</div>}
-            <button className="login-submit" type="submit" disabled={loading||otp.length!==6}>{loading?(isAr?'جارٍ التحقق…':'Verifying…'):(isAr?'تحقق وتابع':'Verify and continue')}</button>
-          </form>}
-
-          {!configured&&<p className="login-config-note">{isAr?'وضع الإعداد: أضف متغيرات Supabase لتفعيل إرسال الرموز.':'Setup mode: add Supabase environment variables to enable email codes.'}</p>}
-          <p className="login-support">{isAr?'يخضع الوصول لسياسات الأمان المعتمدة في مؤسستك.':'Access is governed by your organization security policies.'}</p>
-        </div>
-        <footer className="login-access-footer"><span>© {new Date().getFullYear()} Net Expert</span><span>{isAr?'الخصوصية والأمان':'Privacy & security'}</span></footer>
-      </div>
-    </section>
-  </main>;
-}
