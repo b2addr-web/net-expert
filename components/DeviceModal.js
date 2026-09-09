@@ -51,7 +51,7 @@ function ComboBox({ label, value, onChange, options, placeholder, inputCls, labe
 }
 
 // ── File Upload (standalone — not linked to Excel export) ──────────────────────
-function FileUpload({ t, sheetsUrl, url, fileName, fileLabel, onUrlChange, onFileNameChange, onLabelChange }) {
+function FileUpload({ t, url, fileName, fileLabel, onUrlChange, onFileNameChange, onLabelChange }) {
   const [status, setStatus] = useState(url ? 'done' : 'idle');
   const [drag, setDrag]     = useState(false);
   const inputRef = useRef();
@@ -73,27 +73,7 @@ function FileUpload({ t, sheetsUrl, url, fileName, fileLabel, onUrlChange, onFil
       reader.readAsDataURL(file);
     };
 
-    if (!sheetsUrl) { processLocal(); return; }
-
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async (e) => {
-        const base64 = e.target.result.split(',')[1];
-        const resp = await fetch(sheetsUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'uploadFile', fileName: file.name, mimeType: file.type, data: base64 }),
-        });
-        const json = await resp.json();
-        if (json.url) {
-          onUrlChange(json.url);
-          onFileNameChange(file.name);
-          if (!fileLabel) onLabelChange(file.name.replace(/\.[^/.]+$/, ''));
-          setStatus('done');
-        } else { setStatus('error'); }
-      };
-    } catch { processLocal(); }
+    processLocal();
   };
 
   const handleDrop = (e) => {
@@ -202,7 +182,7 @@ function FileUpload({ t, sheetsUrl, url, fileName, fileLabel, onUrlChange, onFil
 }
 
 // ─── Main Modal ────────────────────────────────────────────────────────────────
-export default function DeviceModal({ t, device, onSave, onClose, sheetsUrl }) {
+export default function DeviceModal({ t, device, onSave, onClose }) {
   const { user } = useAuth();
   const [form, setForm] = useState(BLANK);
   const [error, setError] = useState('');
@@ -335,7 +315,6 @@ export default function DeviceModal({ t, device, onSave, onClose, sheetsUrl }) {
           <div className="pt-1 border-t border-slate-700/30">
             <FileUpload
               t={t}
-              sheetsUrl={sheetsUrl}
               url={form.attachmentUrl}
               fileName={form.attachmentName}
               fileLabel={form.attachmentLabel}

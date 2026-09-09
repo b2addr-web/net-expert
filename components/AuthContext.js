@@ -26,8 +26,9 @@ async function loadProfile(authUser, attempt = 0) {
   }
   const { data: access, error: accessError } = await supabase.rpc('get_my_access');
   if (accessError) throw accessError;
+  const { data: exportPermissions } = await supabase.rpc('get_my_export_permissions');
   const name = data?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0];
-  return { ...(data || {}), ...(access || {}), id: authUser.id, email: authUser.email, name, username: authUser.email, role: access?.role || 'viewer', status: access?.status || data?.status || 'active', permissions: access?.permissions || {} };
+  return { ...(data || {}), ...(access || {}), id: authUser.id, email: authUser.email, name, username: authUser.email, role: access?.role || 'viewer', status: access?.status || data?.status || 'active', permissions: access?.permissions || {}, export_permissions: exportPermissions || {} };
 }
 
 async function recordEvent(event, details = {}) {
@@ -115,9 +116,9 @@ export function AuthProvider({ children }) {
 
   const refreshUsers = async () => {
     if (!supabase || user?.role !== 'company_admin') return [];
-    const { data, error } = await supabase.rpc('list_organization_members');
+    const [{ data, error },{data: exports}] = await Promise.all([supabase.rpc('list_organization_members'),supabase.from('member_export_permissions').select('*')]);
     if (error) throw error;
-    const normalized=(data||[]).map(x=>({...x,id:x.user_id})); setUsers(normalized); return normalized;
+    const normalized=(data||[]).map(x=>{const p=(exports||[]).find(v=>v.user_id===x.user_id);return{...x,id:x.user_id,export_permissions:p?{xlsx:p.can_export_excel,pdf:p.can_export_pdf,financial:p.can_export_financial}:{}}}); setUsers(normalized); return normalized;
   };
 
   const updateMember = async (id, changes) => {
@@ -136,11 +137,12 @@ export function AuthProvider({ children }) {
   };
   const inviteUser=async input=>{await organizationRequest('POST',input);await refreshUsers()};
   const deleteUser=async id=>{await organizationRequest('DELETE',{userId:id});setUsers(items=>items.filter(x=>x.id!==id))};
+  const updateExportPermissions=async(id,p)=>{if(user?.role!=='company_admin')throw new Error('ADMIN_REQUIRED');const{error}=await supabase.from('member_export_permissions').upsert({organization_id:user.organization_id,user_id:id,can_export_excel:!!p.xlsx,can_export_pdf:!!p.pdf,can_export_financial:!!p.financial},{onConflict:'organization_id,user_id'});if(error)throw error;setUsers(items=>items.map(x=>x.id===id?{...x,export_permissions:p}:x));await supabase.rpc('log_organization_event',{action_name:'export_permissions_updated',target_id:id,event_details:p})};
 
   const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; setUser(null); };
   const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; setUser(null); };
 
-  return <AuthContext.Provider value={{ user, users, ready, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateMember, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, users, ready, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
