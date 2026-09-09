@@ -22,10 +22,12 @@ async function loadProfile(authUser, attempt = 0) {
       status: 'active',
     }, { onConflict: 'id' }).select('id,email,full_name,department,role,status,created_at').single();
     if (createError) throw createError;
-    return { ...created, name: created.full_name || created.email?.split('@')[0], username: created.email };
+    return loadProfile(authUser, 0);
   }
+  const { data: access, error: accessError } = await supabase.rpc('get_my_access');
+  if (accessError) throw accessError;
   const name = data?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0];
-  return { ...(data || {}), id: authUser.id, email: authUser.email, name, username: authUser.email, role: data?.role || 'viewer', status: data?.status || 'active' };
+  return { ...(data || {}), ...(access || {}), id: authUser.id, email: authUser.email, name, username: authUser.email, role: access?.role || 'viewer', status: access?.status || data?.status || 'active', permissions: access?.permissions || {} };
 }
 
 async function recordEvent(event, details = {}) {
@@ -75,12 +77,12 @@ export function AuthProvider({ children }) {
     setUser(profile); await recordEvent('login_succeeded', { remember_device: !!rememberMe });
   };
 
-  const signUp = async ({ fullName, email, password }) => {
+  const signUp = async ({ fullName, organizationName, email, password }) => {
     if (!supabase) throw new Error('AUTH_NOT_CONFIGURED');
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin },
+      options: { data: { full_name: fullName, organization_name: organizationName }, emailRedirectTo: window.location.origin },
     });
     if (error) throw error;
     if (!data.user || data.user.identities?.length === 0) throw new Error('ACCOUNT_EXISTS');
@@ -112,24 +114,33 @@ export function AuthProvider({ children }) {
   };
 
   const refreshUsers = async () => {
-    if (!supabase || user?.role !== 'admin') return [];
-    const { data, error } = await supabase.from('profiles').select('id,email,full_name,department,role,status,created_at').order('created_at', { ascending: false });
+    if (!supabase || user?.role !== 'company_admin') return [];
+    const { data, error } = await supabase.rpc('list_organization_members');
     if (error) throw error;
-    setUsers(data || []); return data || [];
+    const normalized=(data||[]).map(x=>({...x,id:x.user_id})); setUsers(normalized); return normalized;
   };
 
-  const updateUserRole = async (id, role) => {
-    if (!supabase || user?.role !== 'admin') throw new Error('ADMIN_REQUIRED');
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+  const updateMember = async (id, changes) => {
+    if (!supabase || user?.role !== 'company_admin') throw new Error('ADMIN_REQUIRED');
+    const current=users.find(x=>x.id===id)||{};
+    const { error } = await supabase.rpc('admin_update_member',{member_id:id,new_role:changes.role||current.role,new_status:changes.status||current.status,new_department:changes.department??current.department,access:changes.permissions||current.permissions||{}});
     if (error) throw error;
-    setUsers(current => current.map(item => item.id === id ? { ...item, role } : item));
-    await recordEvent('user_role_changed', { target_user_id: id, role });
+    setUsers(items => items.map(item => item.id === id ? { ...item, ...changes } : item));
   };
+
+  const organizationRequest = async (method, body) => {
+    const { data:{ session } }=await supabase.auth.getSession();
+    const response=await fetch('/api/organization/users',{method,headers:{'Content-Type':'application/json',Authorization:`Bearer ${session?.access_token||''}`},body:JSON.stringify(body)});
+    if(!response.ok){const payload=await response.json().catch(()=>({}));const error=new Error(payload.message||payload.error||'USER_OPERATION_FAILED');error.code=payload.error;throw error;}
+    return response.status===204?null:response.json();
+  };
+  const inviteUser=async input=>{await organizationRequest('POST',input);await refreshUsers()};
+  const deleteUser=async id=>{await organizationRequest('DELETE',{userId:id});setUsers(items=>items.filter(x=>x.id!==id))};
 
   const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; setUser(null); };
   const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; setUser(null); };
 
-  return <AuthContext.Provider value={{ user, users, ready, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateUserRole, logout, logoutAll }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, users, ready, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateMember, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
