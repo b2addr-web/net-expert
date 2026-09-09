@@ -135,7 +135,10 @@ returns trigger language plpgsql security definer set search_path = public
 as $$ begin
   insert into profiles(id,email,full_name,role,status)
   values(new.id,new.email,nullif(new.raw_user_meta_data->>'full_name',''),'viewer','active')
-  on conflict(id) do nothing;
+  on conflict(id) do update set
+    email = excluded.email,
+    full_name = coalesce(profiles.full_name, excluded.full_name),
+    updated_at = now();
   return new;
 end $$;
 
@@ -174,6 +177,19 @@ drop policy if exists "allow_all_audit" on audit_log;
 drop policy if exists "allow_all_purchases" on purchases;
 drop policy if exists "allow_all_expenses" on expenses;
 drop policy if exists "allow_all_assets" on assets;
+drop policy if exists "profiles_read_own_or_admin" on profiles;
+drop policy if exists "profiles_update_own_or_admin" on profiles;
+drop policy if exists "profiles_insert_own" on profiles;
+drop policy if exists "login_audit_admin_read" on login_audit;
+drop policy if exists "devices_authenticated_read" on devices;
+drop policy if exists "devices_admin_insert" on devices;
+drop policy if exists "devices_admin_update" on devices;
+drop policy if exists "devices_admin_delete" on devices;
+drop policy if exists "audit_authenticated_read" on audit_log;
+drop policy if exists "audit_authenticated_insert" on audit_log;
+drop policy if exists "purchases_admin_access" on purchases;
+drop policy if exists "expenses_admin_access" on expenses;
+drop policy if exists "financial_assets_admin_access" on assets;
 
 create policy "profiles_read_own_or_admin" on profiles for select to authenticated
 using (id = auth.uid() or public.is_admin());
