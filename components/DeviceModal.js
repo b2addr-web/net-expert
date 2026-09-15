@@ -1,354 +1,60 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 
-const BLANK = {
-  name: '', type: '', status: '', serial: '',
-  location: '', online: true,
-  employee: '', empId: '',
-  notes: '',
-  attachmentUrl: '', attachmentName: '', attachmentLabel: '',
-};
+const BLANK={employee_id:'',employee_name:'',email_address:'',department:'',assign_location:'',sim_number:'',mobile_number:'',account_number:'',provider:'',sim_package:'',date_issued:'',date_returned:'',status:'',notes:''};
+const DEPARTMENTS=['Sales','Finance','HR','IT','Operations','Production','Management'];
+const LOCATIONS=['Riyadh','Jeddah','Dammam','Factory','Head Office'];
+const PROVIDERS=['STC','Mobily','Zain'];
+const PACKAGES=['20GB','50GB','100GB','Unlimited'];
+const STATUSES=['Excellent','Active','Returned','Damaged','Lost','Suspended'];
 
-// ── Editable ComboBox ──────────────────────────────────────────────────────────
-function ComboBox({ label, value, onChange, options, placeholder, inputCls, labelCls }) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState(value);
-  const ref = useRef();
+function Field({label,required,children}){return <label className="sim-field"><span>{label}{required&&<b aria-hidden="true"> *</b>}</span>{children}</label>}
+function Select({value,onChange,options,placeholder}){return <select value={value} onChange={onChange}><option value="">{placeholder}</option>{options.map(x=><option key={x} value={x}>{x}</option>)}</select>}
 
-  useEffect(() => { setQ(value); }, [value]);
-
-  useEffect(() => {
-    const fn = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, []);
-
-  const filtered = options.filter(o =>
-    o.label.toLowerCase().includes(q.toLowerCase()) ||
-    o.value.toLowerCase().includes(q.toLowerCase())
-  );
-
-  const pick = (opt) => { setQ(opt.label); onChange(opt.value); setOpen(false); };
-  const handleChange = (e) => { setQ(e.target.value); onChange(e.target.value); setOpen(true); };
-
-  return (
-    <div ref={ref} className="relative">
-      <label className={labelCls}>{label}</label>
-      <input value={q} onChange={handleChange} onFocus={() => setOpen(true)}
-        placeholder={placeholder} className={inputCls} autoComplete="off" />
-      {open && filtered.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-[#0f1929] border border-slate-700/60 rounded-xl shadow-2xl overflow-hidden max-h-44 overflow-y-auto">
-          {filtered.map(o => (
-            <button key={o.value} type="button" onMouseDown={() => pick(o)}
-              className={`w-full text-start px-3 py-2 text-sm text-slate-300 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors ${o.value === value ? 'bg-cyan-500/10 text-cyan-400' : ''}`}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+export default function DeviceModal({t,device,onSave,onClose}){
+ const {user}=useAuth(),ar=t.dir==='rtl';
+ const [form,setForm]=useState(BLANK),[error,setError]=useState(''),[saving,setSaving]=useState(false);
+ useEffect(()=>{setForm(device?{...BLANK,...device}:{...BLANK});setError('')},[device]);
+ const set=(key,value)=>setForm(p=>({...p,[key]:value}));
+ const save=async()=>{
+  const required=['employee_id','employee_name','department','sim_number','mobile_number','provider','date_issued','status'];
+  if(required.some(key=>!String(form[key]||'').trim())){setError(ar?'أكمل جميع الحقول المطلوبة قبل الحفظ.':'Complete all required fields before saving.');return}
+  if(form.email_address&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_address)){setError(ar?'أدخل عنوان بريد إلكتروني صالحاً.':'Enter a valid email address.');return}
+  if(form.date_returned&&form.date_returned<form.date_issued){setError(ar?'تاريخ الإرجاع لا يمكن أن يسبق تاريخ التسليم.':'Return date cannot precede issue date.');return}
+  const now=new Date().toISOString();
+  setSaving(true);setError('');
+  try{await onSave({...form,addedBy:device?.addedBy||user?.name||user?.email||'unknown',addedAt:device?.addedAt||now,updatedBy:user?.name||user?.email||'unknown',updatedByEmail:user?.email||'',updatedAt:now});onClose()}
+  catch(e){console.error('SIM assignment save failed',{message:e?.message,code:e?.code,error:e});setError(e?.code==='23505'?(ar?'رقم الشريحة مسجل مسبقاً في مساحة العمل.':'This SIM number already exists in the workspace.'):(e?.message|| (ar?'تعذر حفظ عهدة SIM.':'Could not save the SIM assignment.')));setSaving(false)}
+ };
+ return <div className="sim-modal-layer" dir={t.dir} role="dialog" aria-modal="true" aria-labelledby="sim-modal-title">
+  <button className="sim-modal-backdrop" onClick={onClose} aria-label={ar?'إغلاق':'Close'}/>
+  <section className="sim-modal">
+   <header className="sim-modal-header"><div><small>{ar?'سجل عهد الموظفين':'Employee custody record'}</small><h2 id="sim-modal-title">{device?(ar?'تعديل عهدة SIM':'Edit SIM assignment'):(ar?'إضافة عهدة SIM جديدة':'Add new SIM assignment')}</h2><p>{ar?'سجّل بيانات الموظف والشريحة وحالة العهدة.':'Record the employee, SIM and custody details.'}</p></div><button onClick={onClose} aria-label={ar?'إغلاق':'Close'}>×</button></header>
+   <div className="sim-modal-body">
+    <fieldset><legend><b>01</b>{ar?'بيانات الموظف':'Employee details'}</legend><div className="sim-form-grid">
+     <Field label="Employee ID" required><input value={form.employee_id} onChange={e=>set('employee_id',e.target.value)} placeholder="100657" autoFocus/></Field>
+     <Field label="Employee Name" required><input value={form.employee_name} onChange={e=>set('employee_name',e.target.value)} placeholder="SAMEH KAMIL"/></Field>
+     <Field label="Email Address"><input type="email" value={form.email_address} onChange={e=>set('email_address',e.target.value)} placeholder="name@company.com"/></Field>
+     <Field label="Department" required><Select value={form.department} onChange={e=>set('department',e.target.value)} options={DEPARTMENTS} placeholder={ar?'اختر القسم':'Select department'}/></Field>
+     <Field label="Assign Location"><Select value={form.assign_location} onChange={e=>set('assign_location',e.target.value)} options={LOCATIONS} placeholder={ar?'اختر الموقع':'Select location'}/></Field>
+    </div></fieldset>
+    <fieldset><legend><b>02</b>{ar?'بيانات الشريحة':'SIM details'}</legend><div className="sim-form-grid">
+     <Field label="SIM Number" required><input value={form.sim_number} onChange={e=>set('sim_number',e.target.value)} inputMode="numeric" placeholder="831046001396"/></Field>
+     <Field label="Mobile Number" required><input value={form.mobile_number} onChange={e=>set('mobile_number',e.target.value)} inputMode="tel" placeholder="0551234567"/></Field>
+     <Field label="Account Number"><input value={form.account_number} onChange={e=>set('account_number',e.target.value)} placeholder="Account reference"/></Field>
+     <Field label="Provider" required><Select value={form.provider} onChange={e=>set('provider',e.target.value)} options={PROVIDERS} placeholder={ar?'اختر المزود':'Select provider'}/></Field>
+     <Field label="SIM Package"><Select value={form.sim_package} onChange={e=>set('sim_package',e.target.value)} options={PACKAGES} placeholder={ar?'اختر الباقة':'Select package'}/></Field>
+    </div></fieldset>
+    <fieldset><legend><b>03</b>{ar?'بيانات العهدة':'Custody details'}</legend><div className="sim-form-grid">
+     <Field label="Date Issued" required><input type="date" value={form.date_issued} onChange={e=>set('date_issued',e.target.value)}/></Field>
+     <Field label="Date Returned"><input type="date" value={form.date_returned} min={form.date_issued} onChange={e=>set('date_returned',e.target.value)}/></Field>
+     <Field label="Status" required><Select value={form.status} onChange={e=>set('status',e.target.value)} options={STATUSES} placeholder={ar?'اختر الحالة':'Select status'}/></Field>
+     <Field label="Notes"><textarea rows="4" value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder={ar?'ملاحظات التسليم أو الإرجاع…':'Issue or return notes…'}/></Field>
+    </div></fieldset>
+    {error&&<div className="sim-form-error" role="alert">{error}</div>}
+   </div>
+   <footer className="sim-modal-footer"><span>{ar?'الحقول المميزة بعلامة * مطلوبة':'Fields marked * are required'}</span><div><button className="sim-cancel" onClick={onClose} disabled={saving}>{ar?'إلغاء':'Cancel'}</button><button className="sim-save" onClick={save} disabled={saving}>{saving?(ar?'جاري الحفظ…':'Saving…'):device?(ar?'حفظ التعديلات':'Save changes'):(ar?'حفظ عهدة SIM':'Save SIM assignment')}</button></div></footer>
+  </section>
+ </div>
 }
 
-// ── File Upload (standalone — not linked to Excel export) ──────────────────────
-function FileUpload({ t, url, fileName, fileLabel, onUrlChange, onFileNameChange, onLabelChange }) {
-  const [status, setStatus] = useState(url ? 'done' : 'idle');
-  const [drag, setDrag]     = useState(false);
-  const inputRef = useRef();
-  const isAr = t.dir === 'rtl';
-
-  const uploadFile = async (file) => {
-    if (!file) return;
-    setStatus('uploading');
-
-    const processLocal = () => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        onUrlChange(e.target.result);
-        onFileNameChange(file.name);
-        if (!fileLabel) onLabelChange(file.name.replace(/\.[^/.]+$/, '')); // default label = filename without extension
-        setStatus('done');
-      };
-      reader.onerror = () => setStatus('error');
-      reader.readAsDataURL(file);
-    };
-
-    processLocal();
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault(); setDrag(false);
-    const file = e.dataTransfer.files[0];
-    if (file) uploadFile(file);
-  };
-
-  const clear = () => {
-    onUrlChange(''); onFileNameChange(''); onLabelChange(''); setStatus('idle');
-  };
-
-  const borderColor = {
-    idle:      drag ? 'border-cyan-500/60 bg-cyan-500/5' : 'border-slate-600/50 hover:border-slate-500/70',
-    uploading: 'border-amber-500/40 bg-amber-500/5',
-    done:      'border-emerald-500/35 bg-emerald-500/5',
-    error:     'border-red-500/40 bg-red-500/5',
-  }[status];
-
-  return (
-    <div className="space-y-2">
-      <label className="block text-slate-400 text-xs font-medium">
-        {isAr ? 'المرفقات' : 'Attachments'}
-        <span className="text-slate-600 font-normal ms-1">({isAr ? 'صورة أو PDF' : 'image or PDF'})</span>
-      </label>
-
-      {/* Drop zone */}
-      {status !== 'done' ? (
-        <div
-          className={`border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${borderColor}`}
-          onDragOver={e => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={handleDrop}
-          onClick={() => status !== 'uploading' && inputRef.current.click()}
-        >
-          <input ref={inputRef} type="file" accept="image/*,.pdf,.doc,.docx" className="hidden"
-            onChange={e => { if (e.target.files[0]) uploadFile(e.target.files[0]); }} />
-
-          {status === 'uploading' ? (
-            <div className="flex items-center justify-center gap-2 text-amber-400 text-xs py-1">
-              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
-              </svg>
-              {isAr ? 'جاري الرفع...' : 'Uploading...'}
-            </div>
-          ) : status === 'error' ? (
-            <div className="text-red-400 text-xs py-1">{isAr ? '✗ فشل الرفع، حاول مرة أخرى' : '✗ Upload failed, try again'}</div>
-          ) : (
-            <div className="flex flex-col items-center gap-1 text-slate-500 text-xs py-1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-6 h-6 mb-1">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-              {isAr ? 'اسحب وأفلت أو اضغط للاختيار' : 'Drag & drop or click to choose'}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Done state — show file card */
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/8 border border-emerald-500/25">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-4 h-4 text-emerald-400">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-emerald-400 text-xs font-medium truncate">{fileName}</p>
-            <p className="text-slate-500 text-xs">{isAr ? 'تم الرفع بنجاح' : 'Uploaded successfully'}</p>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {url && (
-              <a href={url} target="_blank" rel="noopener noreferrer"
-                className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all" title={isAr ? 'فتح' : 'Open'}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
-                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-              </a>
-            )}
-            <button type="button" onClick={clear}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all" title={isAr ? 'حذف' : 'Remove'}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Custom label name — editable by user */}
-      {status === 'done' && (
-        <div>
-          <label className="block text-slate-500 text-xs mb-1">
-            {isAr ? 'اسم الملف (يظهر في الجدول)' : 'File display name (shown in table)'}
-          </label>
-          <input
-            value={fileLabel}
-            onChange={e => onLabelChange(e.target.value)}
-            placeholder={isAr ? 'مثال: صورة الجهاز، فاتورة الشراء...' : 'e.g. Device photo, Invoice...'}
-            className="w-full bg-slate-900/70 border border-slate-700/60 text-slate-100 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-500/60 transition-colors placeholder-slate-600"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Modal ────────────────────────────────────────────────────────────────
-export default function DeviceModal({ t, device, onSave, onClose }) {
-  const { user } = useAuth();
-  const [form, setForm] = useState(BLANK);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    setForm(device ? { ...device } : { ...BLANK });
-    setError('');
-  }, [device]);
-
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const inputCls = 'w-full bg-slate-900/70 border border-slate-700/60 text-slate-100 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-cyan-500/60 transition-colors placeholder-slate-600';
-  const labelCls = 'block text-slate-400 text-xs font-medium mb-1.5';
-
-  const typeOpts     = Object.entries(t.deviceTypes).map(([v, l]) => ({ value: v, label: l }));
-  const statusOpts   = Object.entries(t.statuses).map(([v, l]) => ({ value: v, label: l }));
-  const locationOpts = Object.entries(t.locations).map(([v, l]) => ({ value: v, label: l }));
-
-  const handleSave = () => {
-    if (!form.name.trim() || !form.serial.trim()) { setError(t.modal.required); return; }
-    const now = new Date().toISOString();
-    onSave({
-      ...form,
-      addedBy:       device?.addedBy  || user?.username || 'unknown',
-      addedAt:       device?.addedAt  || now,
-      updatedBy:     user?.username   || 'unknown',
-      updatedByEmail:user?.email      || '',
-      updatedAt:     now,
-    });
-    onClose();
-  };
-
-  const isAr = t.dir === 'rtl';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir={t.dir}>
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl glass bg-[#0a1220]/97 border border-slate-700/50 rounded-2xl shadow-2xl fade-up overflow-hidden max-h-[92vh] flex flex-col">
-        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-cyan-500 to-transparent shrink-0" />
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-slate-700/40">
-          <div>
-            <h3 className="text-white font-semibold text-lg">{device ? t.modal.editTitle : t.modal.addTitle}</h3>
-            {user && (
-              <p className="text-slate-500 text-xs mt-0.5">
-                {isAr ? `بواسطة: ${user.name || user.username}` : `By: ${user.name || user.username}`}
-                {' · '}
-                {new Date().toLocaleString(isAr ? 'ar-SA' : 'en-US')}
-              </p>
-            )}
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors p-1">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="overflow-y-auto p-6 space-y-4 flex-1">
-
-          {/* Name + Serial */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
-              <label className={labelCls}>{t.modal.name} <span className="text-red-400">*</span></label>
-              <input value={form.name} onChange={e => set('name', e.target.value)}
-                className={inputCls} placeholder="e.g. Cisco ISR 4331" />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className={labelCls}>{t.modal.serial} <span className="text-red-400">*</span></label>
-              <input value={form.serial} onChange={e => set('serial', e.target.value)}
-                className={inputCls} placeholder="SN-XXXXXXXX" />
-            </div>
-          </div>
-
-          {/* Type, Status, Location */}
-          <div className="grid grid-cols-3 gap-4">
-            <ComboBox label={t.modal.type}     value={form.type}     onChange={v => set('type', v)}     options={typeOpts}     placeholder={t.modal.typeHint} inputCls={inputCls} labelCls={labelCls} />
-            <ComboBox label={t.modal.status}   value={form.status}   onChange={v => set('status', v)}   options={statusOpts}   placeholder={t.modal.typeHint} inputCls={inputCls} labelCls={labelCls} />
-            <ComboBox label={t.modal.location} value={form.location} onChange={v => set('location', v)} options={locationOpts} placeholder={t.modal.typeHint} inputCls={inputCls} labelCls={labelCls} />
-          </div>
-
-          {/* Employee + EmpID */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>{t.modal.employee}</label>
-              <input value={form.employee} onChange={e => set('employee', e.target.value)}
-                className={inputCls} placeholder={isAr ? 'مثال: أحمد العمري' : 'e.g. John Smith'} />
-            </div>
-            <div>
-              <label className={labelCls}>{t.modal.empId}</label>
-              <input value={form.empId} onChange={e => set('empId', e.target.value)}
-                className={inputCls} placeholder="EMP-001" />
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className={labelCls}>
-              {isAr ? 'ملاحظات' : 'Notes'}
-              <span className="text-slate-600 font-normal ms-1">({isAr ? 'اختياري' : 'optional'})</span>
-            </label>
-            <textarea
-              value={form.notes}
-              onChange={e => set('notes', e.target.value)}
-              rows={3}
-              placeholder={isAr ? 'أضف أي ملاحظات إضافية عن الجهاز...' : 'Add any additional notes about this device...'}
-              className={`${inputCls} resize-none leading-relaxed`}
-            />
-          </div>
-
-          {/* Connection toggle */}
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/40 border border-slate-700/40">
-            <button type="button" onClick={() => set('online', !form.online)}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ${form.online ? 'bg-cyan-500' : 'bg-slate-600'}`}>
-              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${
-                form.online
-                  ? (isAr ? 'right-1' : 'left-6')
-                  : (isAr ? 'right-6' : 'left-1')
-              }`} />
-            </button>
-            <span className="text-slate-300 text-sm">{t.modal.connection}</span>
-            <span className={`ms-auto text-xs px-2.5 py-1 rounded-lg ${form.online ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700/60 text-slate-500'}`}>
-              {form.online ? t.online : t.offline}
-            </span>
-          </div>
-
-          {/* File Attachment — standalone, not linked to Excel */}
-          <div className="pt-1 border-t border-slate-700/30">
-            <FileUpload
-              t={t}
-              url={form.attachmentUrl}
-              fileName={form.attachmentName}
-              fileLabel={form.attachmentLabel}
-              onUrlChange={v  => set('attachmentUrl', v)}
-              onFileNameChange={v => set('attachmentName', v)}
-              onLabelChange={v  => set('attachmentLabel', v)}
-            />
-          </div>
-
-          {/* Auto-recorded */}
-          <div className="p-3 rounded-xl bg-slate-800/30 border border-slate-700/30">
-            <p className="text-slate-500 text-xs font-medium mb-2">⚡ {isAr ? 'يُسجَّل تلقائياً' : 'Auto-recorded'}</p>
-            <div className="grid grid-cols-2 gap-1.5 text-xs text-slate-500">
-              <span>{isAr ? 'المستخدم:' : 'User:'} <span className="text-slate-300">{user?.name || user?.username}</span></span>
-              <span>{isAr ? 'الإيميل:' : 'Email:'} <span className="text-slate-300">{user?.email || '—'}</span></span>
-              <span className="col-span-2">{isAr ? 'الوقت:' : 'Time:'} <span className="text-slate-300">{new Date().toLocaleString(isAr ? 'ar-SA' : 'en-US')}</span></span>
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/25 text-red-400 text-xs rounded-lg px-3 py-2.5">{error}</div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className={`flex gap-3 px-6 py-4 border-t border-slate-700/40 shrink-0 ${isAr ? 'flex-row-reverse' : ''}`}>
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-700/60 hover:bg-slate-600/70 text-slate-300 transition-colors">
-            {t.modal.cancel}
-          </button>
-          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-cyan-500 hover:bg-cyan-400 text-white transition-all shadow-lg shadow-cyan-500/20 active:scale-95">
-            {t.modal.save}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

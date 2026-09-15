@@ -26,6 +26,21 @@ create table if not exists devices (
   created_at      timestamptz default now()
 );
 
+-- SIM custody fields (the active product model)
+alter table devices alter column name drop not null;
+alter table devices add column if not exists employee_id text;
+alter table devices add column if not exists employee_name text;
+alter table devices add column if not exists email_address text;
+alter table devices add column if not exists department text;
+alter table devices add column if not exists assign_location text;
+alter table devices add column if not exists sim_number text;
+alter table devices add column if not exists mobile_number text;
+alter table devices add column if not exists account_number text;
+alter table devices add column if not exists provider text;
+alter table devices add column if not exists sim_package text;
+alter table devices add column if not exists date_issued date;
+alter table devices add column if not exists date_returned date;
+
 -- ── جدول المستخدمين (مع القسم) ────────────────────────────
 create table if not exists users (
   id         bigserial primary key,
@@ -209,3 +224,4 @@ create policy "audit_authenticated_insert" on audit_log for insert to authentica
 create policy "purchases_admin_access" on purchases for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "expenses_admin_access" on expenses for all to authenticated using (public.is_admin()) with check (public.is_admin());
 create policy "financial_assets_admin_access" on assets for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
