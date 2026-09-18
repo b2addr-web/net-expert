@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 const AuthContext = createContext(null);
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+const redirectUrl = path => `${window.location.origin}${path}`;
 
 async function loadProfile(authUser, attempt = 0) {
   if (!supabase || !authUser) return null;
@@ -33,6 +34,8 @@ async function loadProfile(authUser, attempt = 0) {
 
 async function recordEvent(event, details = {}) {
   if (!supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
   const { error } = await supabase.rpc('record_auth_event', { event_name: event, event_details: details });
   if (error) console.warn('Account audit event failed:', error.message);
 }
@@ -83,7 +86,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, organization_name: organizationName }, emailRedirectTo: window.location.origin },
+      options: { data: { full_name: fullName, organization_name: organizationName }, emailRedirectTo: redirectUrl('/') },
     });
     if (error) throw error;
     if (!data.user || data.user.identities?.length === 0) throw new Error('ACCOUNT_EXISTS');
@@ -97,13 +100,13 @@ export function AuthProvider({ children }) {
 
   const resendActivation = async (email) => {
     if (!supabase) throw new Error('AUTH_NOT_CONFIGURED');
-    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin } });
+    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectUrl('/') } });
     if (error) throw error;
   };
 
   const requestPasswordReset = async (email) => {
     if (!supabase) throw new Error('AUTH_NOT_CONFIGURED');
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl('/reset-password') });
     if (error) throw error;
   };
 

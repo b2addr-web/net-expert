@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
 export default async function handler(req, res) {
-  if (!url || !publicKey || !serviceKey) return res.status(503).json({ error: 'SERVER_AUTH_NOT_CONFIGURED' });
+  if (!url || !publicKey || !serviceKey || !siteUrl) return res.status(503).json({ error: 'SERVER_AUTH_NOT_CONFIGURED' });
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!token) return res.status(401).json({ error: 'UNAUTHENTICATED' });
   const scoped = createClient(url, publicKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
@@ -20,10 +21,11 @@ export default async function handler(req, res) {
       const email = String(req.body?.email || '').trim().toLowerCase();
       const role = req.body?.role || 'viewer';
       const department = String(req.body?.department || '').trim() || null;
-      if (!email.includes('@')) return res.status(400).json({ error: 'INVALID_EMAIL' });
+      if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ error: 'INVALID_EMAIL' });
+      if (!['company_admin', 'manager', 'operator', 'viewer'].includes(role)) return res.status(400).json({ error: 'INVALID_ROLE' });
       const { error: inviteRowError } = await scoped.from('organization_invitations').upsert({ organization_id: access.organization_id, email, role, department, invited_by: authData.user.id, status: 'pending' }, { onConflict: 'organization_id,email' });
       if (inviteRowError) throw inviteRowError;
-      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: { full_name: req.body?.fullName || '', invited_to_organization: access.organization_id }, redirectTo: `${req.headers.origin || process.env.NEXT_PUBLIC_SITE_URL}/` });
+      const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { data: { full_name: req.body?.fullName || '', invited_to_organization: access.organization_id }, redirectTo: new URL('/', siteUrl).toString() });
       if (error) throw error;
       await scoped.rpc('log_organization_event', { action_name: 'member_invited', target_id: data.user?.id || null, event_details: { email, role, department } });
       return res.status(201).json({ user: { id: data.user?.id, email, role, department } });
@@ -33,8 +35,7 @@ export default async function handler(req, res) {
       if (!userId || userId === authData.user.id) return res.status(400).json({ error: 'CANNOT_DELETE_SELF' });
       const { data: member } = await scoped.from('organization_members').select('user_id').eq('organization_id', access.organization_id).eq('user_id', userId).maybeSingle();
       if (!member) return res.status(404).json({ error: 'MEMBER_NOT_FOUND' });
-      await scoped.rpc('log_organization_event', { action_name: 'member_deleted', target_id: userId, event_details: {} });
-      const { error } = await admin.auth.admin.deleteUser(userId);
+      const { error } = await scoped.rpc('admin_remove_member', { member_id: userId });
       if (error) throw error;
       return res.status(204).end();
     }
@@ -42,6 +43,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
   } catch (error) {
     console.error('Organization user operation failed', { message: error.message, code: error.code, status: error.status });
-    return res.status(error.status || 500).json({ error: error.code || 'USER_OPERATION_FAILED', message: error.message });
+    const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 500 ? error.status : 500;
+    return res.status(status).json({ error: error.code || 'USER_OPERATION_FAILED' });
   }
 }
