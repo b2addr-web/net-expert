@@ -16,9 +16,14 @@
 ### الخطوة 2: إنشاء الجداول
 1. من القائمة الجانبية اضغط **SQL Editor**
 2. اضغط **New Query**
-3. افتح ملف `supabase-schema.sql` من المشروع
-4. انسخ محتواه كاملاً والصقه في المحرر
-5. اضغط **Run** ✅
+3. شغّل ملفات SQL التالية بالترتيب، ولا تتجاوز أي ملف:
+   1. `supabase-schema.sql`
+   2. `supabase-multitenant.sql`
+   3. `supabase-export-center.sql`
+   4. `supabase-workspace.sql`
+   5. `supabase-workspace-history.sql`
+   6. `supabase-security-hardening.sql`
+4. اضغط **Run** بعد كل ملف وتأكد من عدم وجود خطأ قبل الانتقال للملف التالي ✅
 
 ### الخطوة 3: نسخ مفاتيح الـ API
 1. اذهب إلى **Project Settings** → **API**
@@ -34,7 +39,9 @@ cp .env.local.example .env.local
 ثم افتحه وضع المفاتيح:
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY_HERE
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY_HERE
+NEXT_PUBLIC_SITE_URL=https://YOUR_DOMAIN.example
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY_HERE
 ```
 
 ---
@@ -54,7 +61,9 @@ npm run dev
 3. **مهم:** أضف Environment Variables في Vercel:
    - اذهب إلى Settings → Environment Variables
    - أضف `NEXT_PUBLIC_SUPABASE_URL`
-   - أضف `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - أضف `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - أضف `NEXT_PUBLIC_SITE_URL` بالرابط الرسمي للموقع
+   - أضف `SUPABASE_SERVICE_ROLE_KEY` كمتغير سري، ولا تستخدم معه بادئة `NEXT_PUBLIC_`
 4. اضغط **Deploy** ✅
 
 ---
@@ -68,15 +77,18 @@ npm run dev
 
 ---
 
-## 🔐 إعداد تسجيل الدخول بدون كلمة مرور
+## 🔐 إعداد المصادقة واستعادة كلمة المرور
 
-يعتمد النظام على Supabase Auth Email OTP ولا يحتوي على بيانات دخول ثابتة.
+يعتمد النظام على Supabase Auth ولا يحتوي على بيانات دخول ثابتة.
 
-1. شغّل آخر نسخة من `supabase-schema.sql` لإنشاء Profiles وسياسات RLS وسجل المصادقة.
-2. من Supabase افتح Authentication → Sign In / Providers وفعّل Email OTP.
-3. خصص قالب البريد ليعرض رمز التحقق.
-4. للإنتاج، اربط Custom SMTP؛ خدمة البريد الافتراضية مخصصة للاختبار فقط.
-5. أنشئ أول مستخدم عبر OTP، ثم غيّر دوره إلى `admin` من بيئة إدارية موثوقة.
+1. شغّل جميع ملفات SQL بالترتيب الموضح أعلاه لإنشاء الجداول وسياسات RLS وسجل المصادقة.
+2. من Supabase افتح Authentication → URL Configuration واضبط:
+   - **Site URL:** رابط الموقع الرسمي الموجود في `NEXT_PUBLIC_SITE_URL`.
+   - **Redirect URLs:** أضف `https://YOUR_DOMAIN.example/**`، وللتطوير `http://localhost:3000/**`.
+3. رابط الاستعادة يعيد المستخدم إلى `/reset-password` داخل Net Expert لإنشاء كلمة المرور الجديدة.
+4. لكي يصل البريد باسم الموقع بدل خدمة Supabase الافتراضية، افتح Authentication → SMTP Settings واربط بريدًا من دومينك، مثل `noreply@your-domain.com`، واجعل Sender name هو `Net Expert`.
+5. من Authentication → Email Templates → Reset Password استخدم عنوانًا مثل `إعادة تعيين كلمة مرور Net Expert`، واترك رابط الاستعادة يعتمد على `{{ .ConfirmationURL }}`.
+6. لا تضع كلمة مرور SMTP أو Service Role Key في GitHub أو في متغير يبدأ بـ`NEXT_PUBLIC_`.
 
 كل حساب جديد يحصل على دور `viewer` تلقائياً. لا يستطيع المستخدم اختيار دوره أو ترقية صلاحياته من الواجهة.
 
@@ -84,10 +96,10 @@ npm run dev
 
 ## الحالة الوظيفية الحالية
 
-- Email OTP وإدارة جلسات Supabase.
+- تسجيل بالبريد وكلمة المرور وإدارة جلسات Supabase.
+- استعادة كلمة المرور عبر صفحة داخل الموقع.
 - إنشاء Profile تلقائي واستكمال الاسم والقسم.
 - صلاحيات قاعدة بيانات تعتمد على RLS.
 - سجل أصول مع إضافة وتعديل وحذف وتصدير CSV.
 - واجهة عربية وإنجليزية.
-- تخزين محلي للأصول عند غياب Supabase مخصص للتطوير فقط.
-- وحدات Operations وProcurement وContracts ظاهرة كحالات إعداد صريحة حتى يتم ربط نماذج بياناتها؛ لا تعرض أزراراً وهمية.
+- يتوقف الاتصال بوضوح عند غياب إعدادات Supabase، ولا يتصل بقاعدة افتراضية.
