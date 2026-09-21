@@ -6,30 +6,46 @@ const AuthContext = createContext(null);
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const redirectUrl = path => `${window.location.origin}${path}`;
 
+const baseAccount = authUser => authUser ? {
+  id: authUser.id,
+  email: authUser.email,
+  username: authUser.email,
+  name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0],
+  role: 'viewer',
+  status: 'active',
+  permissions: {},
+  export_permissions: {},
+  accountLoading: true,
+} : null;
+
 async function loadProfile(authUser, attempt = 0) {
   if (!supabase || !authUser) return null;
   const { data, error } = await supabase.from('profiles').select('id,email,full_name,department,role,status,created_at').eq('id', authUser.id).maybeSingle();
-  if (error) throw error;
+  if (error) {
+    if (attempt < 3) { await wait(300 * (attempt + 1)); return loadProfile(authUser, attempt + 1); }
+    throw error;
+  }
   if (!data) {
-    if (attempt < 2) {
+    if (attempt < 3) {
       await wait(250 * (attempt + 1));
       return loadProfile(authUser, attempt + 1);
     }
-    const { data: created, error: createError } = await supabase.from('profiles').upsert({
-      id: authUser.id,
-      email: authUser.email,
-      full_name: authUser.user_metadata?.full_name || null,
-      role: 'viewer',
-      status: 'active',
-    }, { onConflict: 'id' }).select('id,email,full_name,department,role,status,created_at').single();
-    if (createError) throw createError;
+    const { error: repairError } = await supabase.rpc('repair_my_account');
+    if (repairError) throw repairError;
     return loadProfile(authUser, 0);
   }
   const { data: access, error: accessError } = await supabase.rpc('get_my_access');
   if (accessError) throw accessError;
-  const { data: exportPermissions } = await supabase.rpc('get_my_export_permissions');
+  if (!access?.organization_id) {
+    const { error: repairError } = await supabase.rpc('repair_my_account');
+    if (repairError) throw repairError;
+    if (attempt < 4) { await wait(300); return loadProfile(authUser, attempt + 1); }
+    throw new Error('WORKSPACE_ACCESS_MISSING');
+  }
+  const { data: exportPermissions, error: exportError } = await supabase.rpc('get_my_export_permissions');
+  if (exportError) console.warn('Export permissions could not be loaded:', exportError.message);
   const name = data?.full_name || authUser.user_metadata?.full_name || authUser.email?.split('@')[0];
-  return { ...(data || {}), ...(access || {}), id: authUser.id, email: authUser.email, name, username: authUser.email, role: access?.role || 'viewer', status: access?.status || data?.status || 'active', permissions: access?.permissions || {}, export_permissions: exportPermissions || {} };
+  return { ...(data || {}), ...(access || {}), id: authUser.id, email: authUser.email, name, username: authUser.email, role: access?.role || 'viewer', status: access?.status || data?.status || 'active', permissions: access?.permissions || {}, export_permissions: exportPermissions || {}, accountLoading: false };
 }
 
 async function recordEvent(event, details = {}) {
@@ -51,12 +67,16 @@ export function AuthProvider({ children }) {
     let active = true;
     supabase.auth.getSession().then(async ({ data, error }) => {
       if (!active) return;
+      const authUser = data?.session?.user;
       try {
         if (error) throw error;
-        setUser(await loadProfile(data.session?.user));
+        setUser(baseAccount(authUser));
+        if (authUser) setUser(await loadProfile(authUser));
       } catch (sessionError) {
-        console.error('Session initialization failed:', sessionError);
-        setUser(null);
+        console.error('Session initialization failed:', { message: sessionError.message, code: sessionError.code });
+        // Do not discard a valid authenticated session because a secondary
+        // profile/permission request was temporarily unavailable.
+        setUser(baseAccount(authUser));
       } finally { if (active) setReady(true); }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -64,7 +84,8 @@ export function AuthProvider({ children }) {
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
       if (event === 'SIGNED_OUT' || !session?.user) setUser(null);
       else window.setTimeout(() => {
-        loadProfile(session.user).then(profile => { if (active) setUser(profile); }).catch(profileError => console.error('Profile synchronization failed:', profileError));
+        if (active) setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
+        loadProfile(session.user).then(profile => { if (active) setUser(profile); }).catch(profileError => console.error('Profile synchronization failed:', { message: profileError.message, code: profileError.code }));
       }, 0);
       setReady(true);
     });
@@ -76,7 +97,14 @@ export function AuthProvider({ children }) {
     window.localStorage.setItem('ne_remember_device', rememberMe ? '1' : '0');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { await recordEvent('login_failed', { code: error.code || 'unknown' }); throw error; }
-    const profile = await loadProfile(data.user);
+    if (!data.session || !data.user) throw new Error('SESSION_NOT_CREATED');
+    setUser(baseAccount(data.user));
+    let profile;
+    try { profile = await loadProfile(data.user); }
+    catch (profileError) {
+      console.error('Authenticated, but account synchronization failed:', { message: profileError.message, code: profileError.code });
+      throw profileError;
+    }
     if (profile?.status === 'suspended') { await supabase.auth.signOut(); throw new Error('ACCOUNT_SUSPENDED'); }
     setUser(profile); await recordEvent('login_succeeded', { remember_device: !!rememberMe });
   };

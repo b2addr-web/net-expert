@@ -13,4 +13,11 @@ module.exports = {
       ],
     }];
   },
+  webpack(config, { dev }) {
+    // The Windows production builder can stall while snapshotting the shared
+    // runtime dependency tree. Production deployments build cleanly without
+    // relying on this local filesystem cache.
+    if (!dev) config.cache = false;
+    return config;
+  },
 }
