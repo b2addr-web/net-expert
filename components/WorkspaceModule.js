@@ -21,7 +21,7 @@ export function RecordForm({module,record,user,ar,onClose,onSaved}){
 export default function WorkspaceModule({module,user,ar}){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[query,setQuery]=useState(''),[status,setStatus]=useState(''),[department,setDepartment]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState(''),[tab,setTab]=useState('records'),[form,setForm]=useState(undefined),[detail,setDetail]=useState(null),[page,setPage]=useState(0),[deleting,setDeleting]=useState(false),[selected,setSelected]=useState([]),[bulk,setBulk]=useState(false);
  const merge=saved=>setRows(p=>p.map(r=>saved.find(s=>s.id===r.id)||r));
- const duplicate=r=>{const copy={...r};for(const key of ['id','version','created_at','created_by','created_by_name','updated_at','updated_by','updated_by_name'])delete copy[key];copy[module==='sim'?'sim_number':module==='assets'?'serial_number':'request_number']='';if(module==='assets')copy.asset_tag='';setForm(copy)};
+ const duplicate=r=>{const copy={...r};for(const key of ['id','version','created_at','created_by','created_by_name','updated_at','updated_by','updated_by_name'])delete copy[key];copy[module==='sim'?'sim_number':module==='assets'?'serial_number':'request_number']='';setForm(copy)};
  useEffect(()=>setSelected([]),[module,query,status,department,from,to]);
  const config=modules[module],fields=fieldsFor(module),write=can(user,'write',module);
  const load=()=>{setLoading(true);setError('');listRecords(module).then(setRows).catch(e=>setError(e.message)).finally(()=>setLoading(false))};useEffect(load,[module,user.organization_id]);
