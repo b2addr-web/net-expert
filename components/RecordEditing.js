@@ -4,7 +4,7 @@ import {bulkEdit,recordHistory,restoreVersion} from '../lib/workspace';
 import SmartSelect from './SmartSelect';
 
 export function RecordMetadata({record,ar}){return <dl className="record-metadata">{[[ar?'أنشئ بواسطة':'Created By',record.created_by_name||record.created_by],[ar?'تاريخ الإنشاء':'Created Date',record.created_at],[ar?'آخر تعديل بواسطة':'Last Modified By',record.updated_by_name||record.updated_by],[ar?'تاريخ آخر تعديل':'Last Modified Date',record.updated_at]].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value|| (ar?'غير متاح للسجل التاريخي':'Not available for historical record')}</dd></div>)}</dl>}
-export const quickFields=module=>fieldsFor(module).filter(f=>['status','department','assign_location','provider'].includes(f.key));
+export const quickFields=module=>fieldsFor(module).filter(f=>['status','return_status','department','assign_location','provider'].includes(f.key));
 export function QuickCell({module,record,field,user,ar,onSaved}){
  const [editing,setEditing]=useState(false),[value,setValue]=useState(record[field.key]||''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  useEffect(()=>setValue(record[field.key]||''),[record,field.key]);
