@@ -1,7 +1,7 @@
 /* SheetJS Community Edition, pinned to an explicit official release. */
 self.importScripts('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js');
 const XLSX=self.XLSX;
-const headerTokens=['employee id','employee name','email','department','location','mobile','phone','sim number','iccid','account number','provider','carrier','package','date issued','date returned','hardware','asset type','brand','manufacturer','model','serial number','asset tag','warranty','status','notes','الرقم الوظيفي','رقم الموظف','اسم الموظف','البريد','القسم','الاداره','الموقع','رقم الجوال','رقم الهاتف','رقم الشريحه','رقم الحساب','المزود','الاتصالات','الباقه','تاريخ التسليم','تاريخ الارجاع','نوع الاصل','نوع الجهاز','الشركه المصنعه','الماركه','الموديل','الرقم التسلسلي','رمز الاصل','الضمان','الحاله','ملاحظات'];
+const headerTokens=['employee id','employee name','email','department','location','mobile','phone','sim number','iccid','account number','provider','carrier','package','date issued','date returned','return status','return notes','hardware','asset type','brand','manufacturer','model','serial number','warranty','status','notes','الرقم الوظيفي','رقم الموظف','اسم الموظف','البريد','القسم','الاداره','الموقع','رقم الجوال','رقم الهاتف','رقم الشريحه','رقم الحساب','المزود','الاتصالات','الباقه','تاريخ التسليم','تاريخ الاسترداد','حاله الاسترداد','ملاحظات الاسترداد','نوع الاصل','نوع الجهاز','الشركه المصنعه','الماركه','الموديل','الرقم التسلسلي','الضمان','الحاله','ملاحظات'];
 const normalize=value=>String(value??'').trim().toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/[ًٌٍَُِّْـ_\-\/\\().:：]+/g,' ').replace(/\s+/g,' ');
 
 const filled=row=>row.filter(value=>String(value??'').trim()).length;
@@ -24,9 +24,9 @@ function parseSheet(workbook,name){
 self.onmessage=({data})=>{try{
  const workbook=XLSX.read(data,{type:'array',cellDates:true,dateNF:'yyyy-mm-dd',sheetRows:20052});
  if(!workbook.SheetNames.length)throw new Error('No worksheet found');
- const candidates=workbook.SheetNames.map(name=>parseSheet(workbook,name)).filter(candidate=>candidate.headers.length),selected=candidates.sort((a,b)=>b.score-a.score||b.rows.length-a.rows.length)[0];
- if(!selected)throw new Error('No readable table found');
- if(selected.rows.length>20000)throw new Error('Maximum 20,000 data rows');
- self.postMessage({sheetName:selected.name,headers:selected.headers,rows:selected.rows,headerRow:selected.headerIndex+1,availableSheets:workbook.SheetNames});
+ const candidates=workbook.SheetNames.map(name=>parseSheet(workbook,name)).filter(candidate=>candidate.headers.length&&candidate.rows.length),totalRows=candidates.reduce((sum,sheet)=>sum+sheet.rows.length,0);
+ if(!candidates.length)throw new Error('No readable table found');
+ if(totalRows>20000)throw new Error('Maximum 20,000 data rows across all sheets');
+ self.postMessage({sheets:candidates.map(sheet=>({name:sheet.name,headers:sheet.headers,rows:sheet.rows,headerRow:sheet.headerIndex+1})),availableSheets:workbook.SheetNames,totalRows});
 }catch(error){self.postMessage({error:error.message||'Unable to read this workbook'})}};
 
