@@ -1,8 +1,11 @@
-import * as XLSX from 'xlsx';
-import {matchExcelColumns} from '../lib/excel-import';
+/* SheetJS Community Edition, pinned to an explicit official release. */
+self.importScripts('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js');
+const XLSX=self.XLSX;
+const headerTokens=['employee id','employee name','email','department','location','mobile','phone','sim number','iccid','account number','provider','carrier','package','date issued','date returned','hardware','asset type','brand','manufacturer','model','serial number','asset tag','warranty','status','notes','الرقم الوظيفي','رقم الموظف','اسم الموظف','البريد','القسم','الاداره','الموقع','رقم الجوال','رقم الهاتف','رقم الشريحه','رقم الحساب','المزود','الاتصالات','الباقه','تاريخ التسليم','تاريخ الارجاع','نوع الاصل','نوع الجهاز','الشركه المصنعه','الماركه','الموديل','الرقم التسلسلي','رمز الاصل','الضمان','الحاله','ملاحظات'];
+const normalize=value=>String(value??'').trim().toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/[ًٌٍَُِّْـ_\-\/\\().:：]+/g,' ').replace(/\s+/g,' ');
 
 const filled=row=>row.filter(value=>String(value??'').trim()).length;
-const headerScore=row=>Object.keys(matchExcelColumns(row)).length*100+Math.min(filled(row),30);
+const headerScore=row=>row.reduce((score,value)=>{const header=normalize(value);return score+(headerTokens.some(token=>header===token||header.includes(token))?100:0)},0)+Math.min(filled(row),30);
 
 function parseSheet(workbook,name){
  const sheet=workbook.Sheets[name],range=XLSX.utils.decode_range(sheet['!fullref']||sheet['!ref']||'A1');
