@@ -4,7 +4,14 @@ import { supabase } from '../lib/supabase';
 const AuthContext = createContext(null);
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const redirectUrl = path => `${window.location.origin}${path}`;
+const redirectUrl = path => {
+  const configuredSite = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!configuredSite && ['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    throw new Error('SITE_URL_NOT_CONFIGURED');
+  }
+  const origin = configuredSite ? new URL(configuredSite).origin : window.location.origin;
+  return new URL(path, origin).toString();
+};
 
 const baseAccount = authUser => authUser ? {
   id: authUser.id,
@@ -177,3 +184,4 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
