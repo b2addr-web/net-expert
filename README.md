@@ -85,6 +85,7 @@ npm run dev
 2. من Supabase افتح Authentication → URL Configuration واضبط:
    - **Site URL:** رابط الموقع الرسمي الموجود في `NEXT_PUBLIC_SITE_URL`.
    - **Redirect URLs:** أضف `https://YOUR_DOMAIN.example/**`، وللتطوير `http://localhost:3000/**`.
+   - استخدم رابط الموقع الرسمي في `NEXT_PUBLIC_SITE_URL` عند طلب رسائل التفعيل أو استعادة كلمة المرور، حتى تعمل الروابط إذا فُتحت من هاتف أو جهاز آخر. أعد تشغيل التطبيق بعد تغيير هذا المتغير محلياً، أو أعد نشره بعد تغييره في Vercel.
 3. رابط الاستعادة يعيد المستخدم إلى `/reset-password` داخل Net Expert لإنشاء كلمة المرور الجديدة.
 4. لكي يصل البريد باسم الموقع بدل خدمة Supabase الافتراضية، افتح Authentication → SMTP Settings واربط بريدًا من دومينك، مثل `noreply@your-domain.com`، واجعل Sender name هو `Net Expert`.
 5. من Authentication → Email Templates → Reset Password استخدم عنوانًا مثل `إعادة تعيين كلمة مرور Net Expert`، واترك رابط الاستعادة يعتمد على `{{ .ConfirmationURL }}`.
@@ -103,3 +104,4 @@ npm run dev
 - سجل أصول مع إضافة وتعديل وحذف وتصدير CSV.
 - واجهة عربية وإنجليزية.
 - يتوقف الاتصال بوضوح عند غياب إعدادات Supabase، ولا يتصل بقاعدة افتراضية.
+
