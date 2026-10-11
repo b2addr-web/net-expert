@@ -42,22 +42,58 @@ create policy workspace_delete on workspace_records for delete to authenticated 
 -- Copy prior SIM records without changing the source table.
 insert into workspace_records(organization_id,module,data,legacy_key,created_at)
  select organization_id,'sim',jsonb_build_object('employee_id',employee_id,'employee_name',employee_name,'email_address',email_address,'department',department,'assign_location',assign_location,'sim_number',sim_number,'mobile_number',mobile_number,'account_number',account_number,'provider',provider,'sim_package',sim_package,'date_issued',date_issued,'date_returned',date_returned,'status',case when status='Excellent' then 'Active' else status end,'notes',notes,'attachments','[]'::jsonb),id::text,coalesce(created_at,now()) from devices where organization_id is not null and nullif(sim_number,'') is not null on conflict do nothing;
-create or replace function public.save_workspace_record(p_module text,p_id uuid,p_data jsonb,p_version integer) returns public.workspace_records language plpgsql security invoker set search_path=public as $$
- declare result workspace_records; required text[]; k text; begin
- if not workspace_write(p_module) then raise exception 'Access denied'; end if;
- if p_module='sim' then required:=array['employee_id','employee_name','department','assign_location','mobile_number','sim_number','provider','date_issued','status'];
- elsif p_module='assets' then required:=array['employee_id','employee_name','department','assign_location','hardware','brand','serial_number','status'];
- elsif p_module='purchasing' then required:=array['request_number','request_date','requested_by','department','hardware','brand','quantity','status','priority'];
- else raise exception 'Unknown module'; end if;
- foreach k in array required loop if nullif(trim(p_data->>k),'') is null then raise exception 'Required field: %',k; end if; end loop;
- if p_module='purchasing' and ((p_data->>'quantity')::numeric<1 or mod((p_data->>'quantity')::numeric,1)<>0 or coalesce(nullif(p_data->>'estimated_cost',''),'0')::numeric<0) then raise exception 'Invalid quantity or cost'; end if;
- if nullif(p_data->>'date_returned','')::date < nullif(p_data->>'date_issued','')::date or nullif(p_data->>'warranty_end','')::date < nullif(p_data->>'warranty_start','')::date then raise exception 'Invalid date order'; end if;
- if jsonb_typeof(p_data->'attachments')<>'array' then raise exception 'Invalid attachments'; end if;
- if exists(select 1 from jsonb_array_elements(p_data->'attachments') a where a->>'path' not like current_organization_id()::text||'/'||p_module||'/%') then raise exception 'Invalid attachment scope'; end if;
- if p_id is null then insert into workspace_records(module,data) values(p_module,p_data) returning * into result;
- else update workspace_records set data=p_data,version=version+1,updated_at=now() where id=p_id and organization_id=current_organization_id() and module=p_module and version=p_version returning * into result; if result.id is null then raise exception 'Record changed or access denied. Refresh before saving.'; end if; end if;
- return result;
- end $$;
+create or replace function public.save_workspace_record(p_module text,p_id uuid,p_data jsonb,p_version integer)
+returns public.workspace_records
+language plpgsql security definer set search_path=public
+as $$
+declare
+  result workspace_records;
+  previous workspace_records;
+  required text[];
+  k text;
+begin
+  if not workspace_write(p_module) then raise exception 'Access denied'; end if;
+  if p_id is not null then
+    select * into previous from workspace_records
+    where id=p_id and organization_id=current_organization_id() and module=p_module
+    for update;
+    if previous.id is null or previous.version is distinct from p_version then
+      raise exception 'Record changed or access denied. Refresh before saving.';
+    end if;
+  end if;
+  if p_module='sim' then
+    required:=array['employee_id','employee_name','department','sim_number'];
+  elsif p_module='assets' then
+    required:=array['employee_id','employee_name','department','hardware','serial_number','custody_date','assign_location'];
+  elsif p_module='purchasing' then
+    required:=array['request_number','request_date','requested_by','department','hardware','brand','quantity','status','priority'];
+  else raise exception 'Unknown module'; end if;
+  foreach k in array required loop
+    if nullif(trim(p_data->>k),'') is null
+       and (p_id is null or nullif(trim(previous.data->>k),'') is not null) then
+      raise exception 'Required field: %',k;
+    end if;
+  end loop;
+  if p_module='purchasing' and ((p_data->>'quantity')::numeric<1 or mod((p_data->>'quantity')::numeric,1)<>0 or coalesce(nullif(p_data->>'estimated_cost',''),'0')::numeric<0) then
+    raise exception 'Invalid quantity or cost';
+  end if;
+  if nullif(p_data->>'date_returned','')::date < nullif(p_data->>'date_issued','')::date or nullif(p_data->>'warranty_end','')::date < nullif(p_data->>'warranty_start','')::date then
+    raise exception 'Invalid date order';
+  end if;
+  if jsonb_typeof(p_data->'attachments')<>'array' then raise exception 'Invalid attachments'; end if;
+  if exists(select 1 from jsonb_array_elements(p_data->'attachments') a where a->>'path' not like current_organization_id()::text||'/'||p_module||'/%') then
+    raise exception 'Invalid attachment scope';
+  end if;
+  if p_id is null then
+    insert into workspace_records(module,data) values(p_module,p_data) returning * into result;
+  else
+    update workspace_records set data=p_data,version=version+1,updated_at=now()
+    where id=p_id and organization_id=current_organization_id() and module=p_module and version=p_version
+    returning * into result;
+    if result.id is null then raise exception 'Record changed or access denied. Refresh before saving.'; end if;
+  end if;
+  return result;
+end $$;
 -- Direct writes are unavailable; the validation RPC is the write entry point.
 revoke insert,update on workspace_records from authenticated;
 alter function public.save_workspace_record(text,uuid,jsonb,integer) security definer;
