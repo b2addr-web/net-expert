@@ -41,7 +41,6 @@ cp .env.local.example .env.local
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY_HERE
 NEXT_PUBLIC_SITE_URL=https://YOUR_DOMAIN.example
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY_HERE
 ```
 
 ---
@@ -63,8 +62,8 @@ npm run dev
    - أضف `NEXT_PUBLIC_SUPABASE_URL`
    - أضف `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - أضف `NEXT_PUBLIC_SITE_URL` بالرابط الرسمي للموقع
-   - أضف `SUPABASE_SERVICE_ROLE_KEY` كمتغير سري، ولا تستخدم معه بادئة `NEXT_PUBLIC_`
-4. اضغط **Deploy** ✅
+4. انشر وظيفة `supabase/functions/invite-organization-user` في مشروع Supabase مع `verify_jwt = false` كما في `supabase/config.toml`. تتحقق الوظيفة بنفسها من جلسة المستخدم ودور مدير الشركة، وتستخدم مفتاح Supabase السري المتاح لها داخل بيئة الوظائف.
+5. اضغط **Deploy** ✅
 
 ---
 
