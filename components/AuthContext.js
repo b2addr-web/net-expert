@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { storageSet } from '../lib/browserStorage';
 
 const AuthContext = createContext(null);
 
@@ -119,7 +120,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, rememberMe) => {
     if (!supabase) throw new Error('AUTH_NOT_CONFIGURED');
-    window.localStorage.setItem('ne_remember_device', rememberMe ? '1' : '0');
+    storageSet('localStorage', 'ne_remember_device', rememberMe ? '1' : '0');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { await recordEvent('login_failed', { code: error.code || 'unknown' }); throw error; }
     if (!data.session || !data.user) throw new Error('SESSION_NOT_CREATED');
