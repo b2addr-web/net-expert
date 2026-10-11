@@ -79,7 +79,7 @@ export function AuthProvider({ children }) {
       const authUser = data?.session?.user;
       try {
         if (error) throw error;
-        setUser(current => current?.id === authUser?.id && !current.accountLoading ? current : baseAccount(authUser));
+        setUser(current => current && authUser && current.id === authUser.id && !current.accountLoading ? current : baseAccount(authUser));
         if (authUser) {
           const profile = await loadProfile(authUser);
           if (active) { setUser(profile); setProfileError(null); }
@@ -89,7 +89,7 @@ export function AuthProvider({ children }) {
         // Do not discard a valid authenticated session because a secondary
         // profile/permission request was temporarily unavailable.
         if (active) {
-          setUser(current => current?.id === authUser?.id && !current.accountLoading ? current : baseAccount(authUser));
+          setUser(current => current && authUser && current.id === authUser.id && !current.accountLoading ? current : baseAccount(authUser));
           setProfileError(sessionError);
         }
       } finally { if (active) setReady(true); }
