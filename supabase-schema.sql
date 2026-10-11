@@ -195,6 +195,8 @@ drop policy if exists "allow_all_expenses" on expenses;
 drop policy if exists "allow_all_assets" on assets;
 drop policy if exists "profiles_read_own_or_admin" on profiles;
 drop policy if exists "profiles_update_own_or_admin" on profiles;
+drop policy if exists "profiles_read_own" on profiles;
+drop policy if exists "profiles_update_own" on profiles;
 drop policy if exists "profiles_insert_own" on profiles;
 drop policy if exists "login_audit_admin_read" on login_audit;
 drop policy if exists "devices_authenticated_read" on devices;
@@ -207,12 +209,8 @@ drop policy if exists "purchases_admin_access" on purchases;
 drop policy if exists "expenses_admin_access" on expenses;
 drop policy if exists "financial_assets_admin_access" on assets;
 
-create policy "profiles_read_own_or_admin" on profiles for select to authenticated
-using (id = auth.uid() or public.is_admin());
-create policy "profiles_update_own_or_admin" on profiles for update to authenticated
-using (id = auth.uid() or public.is_admin()) with check (id = auth.uid() or public.is_admin());
-create policy "profiles_insert_own" on profiles for insert to authenticated
-with check (id = auth.uid() and role = 'viewer');
+create policy "profiles_read_own" on profiles for select to authenticated
+using (id = auth.uid());
 create policy "login_audit_admin_read" on login_audit for select to authenticated
 using (public.is_admin());
 
