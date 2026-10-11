@@ -41,11 +41,11 @@ alter table devices add column if not exists sim_package text;
 alter table devices add column if not exists date_issued date;
 alter table devices add column if not exists date_returned date;
 
--- ── جدول المستخدمين (مع القسم) ────────────────────────────
+-- ── جدول مستخدمي النسخة القديمة (بدون كلمات مرور) ───────────
+-- المصادقة الحالية تتم حصراً عبر Supabase Auth.
 create table if not exists users (
   id         bigserial primary key,
   username   text unique not null,
-  password   text not null,
   role       text default 'viewer',
   department text default 'it',
   name       text,
@@ -140,6 +140,7 @@ create table if not exists login_audit (
 
 alter table profiles enable row level security;
 alter table login_audit enable row level security;
+revoke insert, update, delete on table public.profiles from anon, authenticated;
 
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public
