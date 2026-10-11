@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { storageGet, storageSet } from '../lib/browserStorage';
 
 // ── الثيمات المتاحة ────────────────────────────────────────────────────────────
 export const THEMES = [
@@ -76,9 +77,9 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(THEMES[0]);
 
   useEffect(() => {
-    const savedDark  = localStorage.getItem('ne_dark');
-    const savedTheme = localStorage.getItem('ne_theme_id');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const savedDark  = storageGet('localStorage', 'ne_dark');
+    const savedTheme = storageGet('localStorage', 'ne_theme_id');
+    const prefersDark = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
     const isDark = savedDark !== null ? savedDark === '1' : prefersDark;
     setDark(isDark);
     document.documentElement.classList.toggle('dark', isDark);
@@ -92,7 +93,7 @@ export function ThemeProvider({ children }) {
     setDark(d => {
       const next = !d;
       document.documentElement.classList.toggle('dark', next);
-      localStorage.setItem('ne_dark', next ? '1' : '0');
+      storageSet('localStorage', 'ne_dark', next ? '1' : '0');
       return next;
     });
   };
@@ -100,7 +101,7 @@ export function ThemeProvider({ children }) {
   const changeTheme = (t) => {
     setTheme(t);
     applyTheme(t);
-    localStorage.setItem('ne_theme_id', t.id);
+    storageSet('localStorage', 'ne_theme_id', t.id);
   };
 
   return (
