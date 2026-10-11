@@ -67,6 +67,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [ready, setReady] = useState(false);
+  const [profileError, setProfileError] = useState(null);
   const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
@@ -77,27 +78,44 @@ export function AuthProvider({ children }) {
       const authUser = data?.session?.user;
       try {
         if (error) throw error;
-        setUser(baseAccount(authUser));
-        if (authUser) setUser(await loadProfile(authUser));
+        setUser(current => current?.id === authUser?.id && !current.accountLoading ? current : baseAccount(authUser));
+        if (authUser) {
+          const profile = await loadProfile(authUser);
+          if (active) { setUser(profile); setProfileError(null); }
+        }
       } catch (sessionError) {
         console.error('Session initialization failed:', { message: sessionError.message, code: sessionError.code });
         // Do not discard a valid authenticated session because a secondary
         // profile/permission request was temporarily unavailable.
-        setUser(baseAccount(authUser));
+        if (active) {
+          setUser(current => current?.id === authUser?.id && !current.accountLoading ? current : baseAccount(authUser));
+          setProfileError(sessionError);
+        }
       } finally { if (active) setReady(true); }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-      if (event === 'SIGNED_OUT' || !session?.user) setUser(null);
-      else window.setTimeout(() => {
-        if (active) setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
-        loadProfile(session.user).then(profile => { if (active) setUser(profile); }).catch(profileError => console.error('Profile synchronization failed:', { message: profileError.message, code: profileError.code }));
-      }, 0);
+      if (event === 'SIGNED_OUT' || !session?.user) { setUser(null); setProfileError(null); }
+      else {
+        setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
+        window.setTimeout(() => {
+          loadProfile(session.user).then(profile => { if (active) { setUser(profile); setProfileError(null); } }).catch(error => { console.error('Profile synchronization failed:', { message: error.message, code: error.code }); if (active) setProfileError(error); });
+        }, 0);
+      }
       setReady(true);
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
+
+  const retryProfile = async () => {
+    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+    if (error || !authUser) { setUser(null); throw error || new Error('SESSION_EXPIRED'); }
+    setProfileError(null);
+    setUser(baseAccount(authUser));
+    try { const profile = await loadProfile(authUser); setUser(profile); }
+    catch (loadError) { setProfileError(loadError); throw loadError; }
+  };
 
   const login = async (email, password, rememberMe) => {
     if (!supabase) throw new Error('AUTH_NOT_CONFIGURED');
@@ -180,7 +198,7 @@ export function AuthProvider({ children }) {
   const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; setUser(null); };
   const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; setUser(null); };
 
-  return <AuthContext.Provider value={{ user, users, ready, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, users, ready, profileError, retryProfile, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
