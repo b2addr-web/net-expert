@@ -1,5 +1,5 @@
-/* SheetJS Community Edition, pinned to an explicit official release. */
-self.importScripts('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js');
+/* SheetJS Community Edition 0.20.3, served from this deployment. */
+self.importScripts('/vendor/xlsx.full.min.js');
 const XLSX=self.XLSX;
 const headerTokens=['employee id','employee name','email','department','location','mobile','phone','sim number','iccid','account number','provider','carrier','package','date issued','date returned','return status','return notes','hardware','asset type','brand','manufacturer','model','serial number','warranty','status','notes','الرقم الوظيفي','رقم الموظف','اسم الموظف','البريد','القسم','الاداره','الموقع','رقم الجوال','رقم الهاتف','رقم الشريحه','رقم الحساب','المزود','الاتصالات','الباقه','تاريخ التسليم','تاريخ الاسترداد','حاله الاسترداد','ملاحظات الاسترداد','نوع الاصل','نوع الجهاز','الشركه المصنعه','الماركه','الموديل','الرقم التسلسلي','الضمان','الحاله','ملاحظات'];
 const normalize=value=>String(value??'').trim().toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/[ًٌٍَُِّْـ_\-\/\\().:：]+/g,' ').replace(/\s+/g,' ');
