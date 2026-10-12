@@ -177,9 +177,9 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   };
 
-  const confirmPasswordRecovery = async tokenHash => {
-    if (!supabase || !tokenHash) throw new Error('RECOVERY_LINK_INVALID');
-    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+  const confirmEmailLink = async (tokenHash, type) => {
+    if (!supabase || !tokenHash || !['recovery', 'invite'].includes(type)) throw new Error('RECOVERY_LINK_INVALID');
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     if (error || !data?.session?.user) throw new Error('RECOVERY_LINK_INVALID');
     saveRecoveryGrant(data.session.user.id);
     setRecoveryMode(true);
@@ -237,7 +237,7 @@ export function AuthProvider({ children }) {
   const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; setUser(null); };
   const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; setUser(null); };
 
-  return <AuthContext.Provider value={{ user, users, ready, profileError, retryProfile, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, confirmPasswordRecovery, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, users, ready, profileError, retryProfile, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, confirmEmailLink, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);
