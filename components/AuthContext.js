@@ -203,6 +203,7 @@ export function AuthProvider({ children }) {
     }
     if(data?.error) throw new Error(data.error);
     await refreshUsers();
+    return data;
   };
   const deleteUser=async id=>{await organizationRequest('DELETE',{userId:id});setUsers(items=>items.filter(x=>x.id!==id))};
   const updateExportPermissions=async(id,p)=>{if(user?.role!=='company_admin')throw new Error('ADMIN_REQUIRED');const{error}=await supabase.from('member_export_permissions').upsert({organization_id:user.organization_id,user_id:id,can_export_excel:!!p.xlsx,can_export_pdf:!!p.pdf,can_export_financial:!!p.financial},{onConflict:'organization_id,user_id'});if(error)throw error;setUsers(items=>items.map(x=>x.id===id?{...x,export_permissions:p}:x));await supabase.rpc('log_organization_event',{action_name:'export_permissions_updated',target_id:id,event_details:p})};
