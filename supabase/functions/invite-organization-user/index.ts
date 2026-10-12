@@ -63,6 +63,17 @@ Deno.serve(async (req) => {
       data: { full_name: fullName, invited_to_organization: access.organization_id },
       redirectTo: 'https://www.netexpert.dev/',
     });
+    if (error?.code === 'email_exists') {
+      const { data: existing, error: addError } = await scoped.rpc('admin_add_existing_member', {
+        invitee_email: email, invitee_role: role, invitee_department: department,
+      });
+      if (addError) {
+        const known = ['ALREADY_MEMBER', 'ACCOUNT_NOT_CONFIRMED'].find(code => addError.message.includes(code));
+        if (known) return response({ error: known }, 409, origin);
+        throw addError;
+      }
+      return response({ user: { id: existing.user_id, email, role, department }, delivery: 'existing_account' }, 200, origin);
+    }
     if (error) throw error;
 
     const { error: logError } = await scoped.rpc('log_organization_event', {
