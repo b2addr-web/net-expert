@@ -27,6 +27,13 @@ module.exports = {
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
       ],
+    },{
+      source: '/auth/confirm',
+      headers: [
+        { key: 'Cache-Control', value: 'no-store' },
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+      ],
     }];
   },
   webpack(config, { dev }) {

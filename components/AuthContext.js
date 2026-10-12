@@ -1,8 +1,19 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { storageSet } from '../lib/browserStorage';
+import { storageGet, storageRemove, storageSet } from '../lib/browserStorage';
 
 const AuthContext = createContext(null);
+const recoveryGrantKey = 'ne_password_recovery_grant';
+const recoveryGrantLifetime = 30 * 60 * 1000;
+const readRecoveryGrant = () => {
+  try {
+    const grant = JSON.parse(storageGet('sessionStorage', recoveryGrantKey) || 'null');
+    const age = Date.now() - grant?.createdAt;
+    return grant?.userId && Number.isFinite(age) && age >= 0 && age < recoveryGrantLifetime ? grant.userId : null;
+  } catch { return null; }
+};
+const saveRecoveryGrant = userId => storageSet('sessionStorage', recoveryGrantKey, JSON.stringify({ userId, createdAt: Date.now() }));
+const clearRecoveryGrant = () => storageRemove('sessionStorage', recoveryGrantKey);
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 const redirectUrl = path => {
@@ -80,6 +91,7 @@ export function AuthProvider({ children }) {
       try {
         if (error) throw error;
         setUser(current => current && authUser && current.id === authUser.id && !current.accountLoading ? current : baseAccount(authUser));
+        setRecoveryMode(Boolean(authUser && readRecoveryGrant() === authUser.id));
         if (authUser) {
           const profile = await loadProfile(authUser);
           if (active) { setUser(profile); setProfileError(null); }
@@ -96,8 +108,8 @@ export function AuthProvider({ children }) {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
-      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-      if (event === 'SIGNED_OUT' || !session?.user) { setUser(null); setProfileError(null); }
+      if (event === 'PASSWORD_RECOVERY' && session?.user) { saveRecoveryGrant(session.user.id); setRecoveryMode(true); }
+      if (event === 'SIGNED_OUT' || !session?.user) { clearRecoveryGrant(); setRecoveryMode(false); setUser(null); setProfileError(null); }
       else {
         setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
         window.setTimeout(() => {
@@ -124,6 +136,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { await recordEvent('login_failed', { code: error.code || 'unknown' }); throw error; }
     if (!data.session || !data.user) throw new Error('SESSION_NOT_CREATED');
+    clearRecoveryGrant(); setRecoveryMode(false);
     setUser(baseAccount(data.user));
     let profile;
     try { profile = await loadProfile(data.user); }
@@ -164,11 +177,24 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   };
 
+  const confirmPasswordRecovery = async tokenHash => {
+    if (!supabase || !tokenHash) throw new Error('RECOVERY_LINK_INVALID');
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+    if (error || !data?.session?.user) throw new Error('RECOVERY_LINK_INVALID');
+    saveRecoveryGrant(data.session.user.id);
+    setRecoveryMode(true);
+  };
+
   const updatePassword = async (password) => {
     if (!supabase) throw new Error('AUTH_NOT_CONFIGURED');
+    const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+    if (userError || !authUser || readRecoveryGrant() !== authUser.id) throw new Error('RECOVERY_LINK_INVALID');
     const { error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
-    setRecoveryMode(false); await recordEvent('password_changed');
+    await recordEvent('password_changed');
+    clearRecoveryGrant(); setRecoveryMode(false);
+    await supabase.auth.signOut({ scope: 'local' });
+    setUser(null);
   };
 
   const refreshUsers = async () => {
@@ -211,7 +237,7 @@ export function AuthProvider({ children }) {
   const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; setUser(null); };
   const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; setUser(null); };
 
-  return <AuthContext.Provider value={{ user, users, ready, profileError, retryProfile, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, users, ready, profileError, retryProfile, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, confirmPasswordRecovery, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

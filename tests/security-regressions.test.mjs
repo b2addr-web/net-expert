@@ -4,9 +4,14 @@ import {readFile} from 'node:fs/promises';
 
 const read=path=>readFile(new URL(path,import.meta.url),'utf8');
 
-test('password recovery returns to the branded site page',async()=>{
-  const [auth,page]=await Promise.all([read('../components/AuthContext.js'),read('../pages/reset-password.js')]);
+test('password recovery verifies the branded confirmation link before password update',async()=>{
+  const [auth,confirm,page,headers]=await Promise.all([read('../components/AuthContext.js'),read('../pages/auth/confirm.js'),read('../pages/reset-password.js'),read('../next.config.js')]);
   assert.match(auth,/redirectUrl\('\/reset-password'\)/);
+  assert.match(auth,/verifyOtp\(\{ token_hash: tokenHash, type: 'recovery' \}\)/);
+  assert.match(auth,/readRecoveryGrant\(\) !== authUser\.id/);
+  assert.match(confirm,/window\.history\.replaceState/);
+  assert.match(confirm,/router\.replace\('\/reset-password'\)/);
+  assert.match(headers,/source: '\/auth\/confirm'/);
   assert.match(page,/initialMode="newPassword"/);
 });
 
