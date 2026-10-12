@@ -4,3 +4,20 @@
 .record-actions,.bulk-toolbar{display:flex;gap:8px;align-items:center;white-space:nowrap}.bulk-toolbar{padding:12px;background:#eff6ff}.quick-cell{min-width:220px;white-space:normal}.record-metadata{padding:12px;background:#f8fafc;display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px}.record-metadata dd{margin:4px 0;overflow-wrap:anywhere}.record-metadata dt{color:#64748b}.version-history{border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px}.version-history article{border:1px solid #e5e7eb;border-radius:6px;padding:12px;margin:12px 0}.version-history dd{overflow-wrap:anywhere;white-space:pre-wrap}.version-history ins{text-decoration:none;color:#166534}.version-history del{color:#64748b}.bulk-field{margin:16px 0}.bulk-field label{display:flex;gap:8px;margin-bottom:8px}.unsaved-prompt{position:absolute;inset:auto 20px 85px;background:white;border:1px solid #cbd5e1;box-shadow:0 8px 40px #0003;padding:20px;z-index:30}.unsaved-prompt button{margin:4px}.work-form{position:relative}.work-details{overflow:auto;max-height:90vh}
 
 .workspace-switch-label{display:grid;gap:6px;font-size:12px;color:#475569}.workspace-switch-label select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#1f2937}
+
+.workspace-top .workspace-search-button{border:1px solid #cbd5e1;border-radius:4px;padding:8px 12px;background:#fff;color:#0f6cbd;white-space:nowrap}
+.global-search{width:min(860px,100%)}
+.global-search-body{padding:22px 28px;overflow:auto;flex:1}
+.global-search-body>label{display:block;margin-bottom:8px;font-size:12px;color:#475569}
+.global-search-body>input{width:100%;height:44px;border:1px solid #cbd5e1;border-radius:4px;padding:10px 12px;margin-bottom:18px}
+.global-search-person{border:1px solid #e5e7eb;border-radius:5px;margin:16px 0;padding:18px;background:#fff}
+.global-search-person h3{margin:0 0 6px;font-size:17px}
+.global-search-person h4{margin:18px 0 8px;font-size:13px;color:#0f6cbd}
+.global-search-person h4 span{color:#64748b;font-weight:400}
+.global-search-person details{border-top:1px solid #edf0f3;padding:10px 0}
+.global-search-person summary{cursor:pointer;font-weight:500}
+.global-search-person dl{padding:8px 0;margin:0}
+.global-search-person dl div{display:grid;grid-template-columns:minmax(130px,1fr) 2fr;gap:12px}
+.global-search-files{display:grid;gap:8px;padding:10px 0}
+.global-search-files button{justify-self:start;border:0;background:none;color:#0f6cbd}
+@media(max-width:700px){.global-search-body{padding:18px}.global-search-person dl div{grid-template-columns:1fr}.workspace-top .workspace-search-button{margin-inline-end:auto}}
