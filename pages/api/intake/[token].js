@@ -6,10 +6,19 @@ export default async function handler(req,res){
  if(!['GET','POST'].includes(req.method)){res.setHeader('Allow',['GET','POST']);return res.status(405).json({error:'METHOD_NOT_ALLOWED'});}
  res.setHeader('Cache-Control','no-store');
  const token=String(req.query.token||'');
- if(!/^[A-Za-z0-9_-]{43}$/.test(token))return res.status(404).json({error:'LINK_UNAVAILABLE'});
+ const shortCode=/^[A-Za-z0-9]{22}$/.test(token);
+ if(!shortCode&&!/^[A-Za-z0-9_-]{43}$/.test(token))return res.status(404).json({error:'LINK_UNAVAILABLE'});
  try{
   const db=serverClient();
-  const {data:link,error:linkError}=await db.from('intake_links').select('id,organization_id,kind,label,active').eq('token_hash',tokenHash(token)).eq('active',true).maybeSingle();
+  let linkId=null;
+  if(shortCode){
+   const {data:alias,error:aliasError}=await db.from('intake_link_aliases').select('link_id').eq('code_hash',tokenHash(token)).maybeSingle();
+   if(aliasError)throw aliasError;
+   linkId=alias?.link_id;
+   if(!linkId)return res.status(404).json({error:'LINK_UNAVAILABLE'});
+  }
+  const lookup=db.from('intake_links').select('id,organization_id,kind,label,active,token_hash').eq('active',true);
+  const {data:link,error:linkError}=await (shortCode?lookup.eq('id',linkId):lookup.eq('token_hash',tokenHash(token))).maybeSingle();
   if(linkError)throw linkError;
   if(!link)return res.status(404).json({error:'LINK_UNAVAILABLE'});
   if(req.method==='GET')return res.status(200).json({kind:link.kind,label:link.label});
@@ -30,7 +39,7 @@ export default async function handler(req,res){
   if(!process.env.INTAKE_RATE_LIMIT_SECRET)throw new Error('SERVER_NOT_CONFIGURED');
   const ipHash=createHash('sha256').update(`${process.env.INTAKE_RATE_LIMIT_SECRET}:${clientIp}`).digest('hex');
   const payload=Object.fromEntries(['employee_name','employee_number','email','department','issue_type','device_type','description'].map(key=>[key,String(body[key]||'').trim()]));
-  const {data,error}=await db.rpc('submit_intake_case',{p_token_hash:tokenHash(token),p_ip_hash:ipHash,p_data:payload});
+  const {data,error}=await db.rpc('submit_intake_case',{p_token_hash:link.token_hash,p_ip_hash:ipHash,p_data:payload});
   if(error){if(/RATE_LIMITED/.test(error.message))return res.status(429).json({error:'RATE_LIMITED'});if(/LINK_UNAVAILABLE/.test(error.message))return res.status(404).json({error:'LINK_UNAVAILABLE'});throw error;}
   const record=data?.[0];if(!record)throw new Error('Case creation returned no record');
   let attachmentSaved=true;
