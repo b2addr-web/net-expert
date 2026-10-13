@@ -1,4 +1,4 @@
-import {adminContext,serverClient,newToken,newShortCode,tokenHash,sealToken,openToken,REPORT_STATUSES,REQUEST_STATUSES,sendCaseEmail,validText} from '../../../lib/intake-server';
+import {adminContext,canReadIntake,canWriteIntake,serverClient,newToken,newShortCode,tokenHash,sealToken,openToken,REPORT_STATUSES,REQUEST_STATUSES,sendCaseEmail,validText} from '../../../lib/intake-server';
 
 const publicOrigin=()=>new URL(process.env.NEXT_PUBLIC_SITE_URL).origin.replace(/^https:\/\/www\./,'https://');
 const shortUrl=code=>`${publicOrigin()}/i/${code}`;
@@ -10,9 +10,11 @@ export default async function handler(req,res){
   const admin=await adminContext(req);if(!admin)return res.status(403).json({error:'ADMIN_REQUIRED'});
   const db=serverClient(),org=admin.organizationId;
   if(req.method==='GET'){
+   const kind=String(req.query.kind||'');
+   if(!canReadIntake(admin,kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
    const [{data:links,error:linksError},{data:cases,error:casesError}]=await Promise.all([
-    db.from('intake_links').select('id,kind,label,active,created_at,token_encrypted').eq('organization_id',org).order('created_at',{ascending:false}),
-    db.from('intake_cases').select('id,reference,kind,employee_name,employee_number,email,department,issue_type,device_type,description,status,attachment_path,created_at,updated_at').eq('organization_id',org).order('created_at',{ascending:false}).limit(1000)
+    db.from('intake_links').select('id,kind,label,active,created_at,token_encrypted').eq('organization_id',org).eq('kind',kind).order('created_at',{ascending:false}),
+    db.from('intake_cases').select('id,reference,kind,employee_name,employee_number,email,department,issue_type,device_type,description,status,attachment_path,created_at,updated_at').eq('organization_id',org).eq('kind',kind).order('created_at',{ascending:false}).limit(1000)
    ]);
    if(linksError||casesError)throw linksError||casesError;
    const {data:existingAliases,error:aliasError}=links.length?await db.from('intake_link_aliases').select('link_id,code_encrypted').in('link_id',links.map(link=>link.id)):{data:[],error:null};
@@ -35,6 +37,7 @@ export default async function handler(req,res){
   if(req.method==='POST'){
    if(body.action==='create_link'){
     if(!['report','device_request'].includes(body.kind)||!validText(body.label,100))return res.status(400).json({error:'INVALID_FIELDS'});
+    if(!canWriteIntake(admin,body.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
     const token=newToken(),code=newShortCode();
     if(!process.env.NEXT_PUBLIC_SITE_URL)return res.status(503).json({error:'SITE_URL_NOT_CONFIGURED'});
     const {data,error}=await db.from('intake_links').insert({organization_id:org,kind:body.kind,label:body.label.trim(),token_hash:tokenHash(token),token_encrypted:sealToken(token),created_by:admin.user.id}).select('id,kind,label,active,created_at').single();
@@ -45,8 +48,9 @@ export default async function handler(req,res){
    }
    if(body.action==='note'){
     if(!validText(body.caseId,40)||!validText(body.note,3000))return res.status(400).json({error:'INVALID_FIELDS'});
-    const {data:record}=await db.from('intake_cases').select('id').eq('id',body.caseId).eq('organization_id',org).maybeSingle();
+    const {data:record}=await db.from('intake_cases').select('id,kind').eq('id',body.caseId).eq('organization_id',org).maybeSingle();
     if(!record)return res.status(404).json({error:'CASE_NOT_FOUND'});
+    if(!canWriteIntake(admin,record.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
     const {error}=await db.from('intake_notes').insert({case_id:record.id,organization_id:org,body:body.note.trim(),actor_id:admin.user.id});if(error)throw error;
     return res.status(201).json({ok:true});
    }
@@ -54,6 +58,9 @@ export default async function handler(req,res){
   }
   if(body.action==='link'){
    if(!validText(body.id,40)||typeof body.active!=='boolean')return res.status(400).json({error:'INVALID_FIELDS'});
+   const {data:link,error:readError}=await db.from('intake_links').select('id,kind').eq('id',body.id).eq('organization_id',org).maybeSingle();
+   if(readError)throw readError;if(!link)return res.status(404).json({error:'LINK_NOT_FOUND'});
+   if(!canWriteIntake(admin,link.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
    const {data,error}=await db.from('intake_links').update({active:body.active,disabled_at:body.active?null:new Date().toISOString()}).eq('id',body.id).eq('organization_id',org).select('id,active').maybeSingle();
    if(error)throw error;if(!data)return res.status(404).json({error:'LINK_NOT_FOUND'});
    return res.status(200).json(data);
@@ -62,6 +69,7 @@ export default async function handler(req,res){
    if(!validText(body.caseId,40)||typeof body.status!=='string')return res.status(400).json({error:'INVALID_FIELDS'});
    const {data:record,error:readError}=await db.from('intake_cases').select('id,reference,kind,email,status').eq('id',body.caseId).eq('organization_id',org).maybeSingle();
    if(readError)throw readError;if(!record)return res.status(404).json({error:'CASE_NOT_FOUND'});
+   if(!canWriteIntake(admin,record.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
    const choices=record.kind==='report'?REPORT_STATUSES:REQUEST_STATUSES;
    if(!choices.includes(body.status))return res.status(400).json({error:'INVALID_STATUS'});
    if(record.status===body.status)return res.status(200).json({ok:true,emailSent:false});
