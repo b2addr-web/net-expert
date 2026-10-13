@@ -1,1 +1,1 @@
-export {default} from '../intake/[token]';
+export {default,getServerSideProps} from '../intake/[token]';
