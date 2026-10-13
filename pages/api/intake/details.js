@@ -11,7 +11,11 @@ export default async function handler(req,res){
   const {data:notes,error:noteError}=await db.from('intake_notes').select('id,body,old_status,new_status,created_at').eq('case_id',id).eq('organization_id',admin.organizationId).order('created_at',{ascending:true});
   if(noteError)throw noteError;
   let imageUrl=null;
-  if(record.attachment_path){const {data}=await db.storage.from('intake-images').createSignedUrl(record.attachment_path,60);imageUrl=data?.signedUrl||null;}
-  return res.status(200).json({record,notes,imageUrl});
+  if(record.attachment_path){
+   const {data,error:imageError}=await db.storage.from('intake-images').createSignedUrl(record.attachment_path,600);
+   if(imageError)console.error('Intake signed image failed',{message:imageError.message});
+   imageUrl=data?.signedUrl||null;
+  }
+  return res.status(200).json({record,notes,imageUrl,imageUnavailable:Boolean(record.attachment_path&&!imageUrl)});
  }catch(error){console.error('Intake details failed',{message:error.message});return res.status(500).json({error:'DETAILS_FAILED'});}
 }
