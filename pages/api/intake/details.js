@@ -1,4 +1,4 @@
-import {adminContext,serverClient} from '../../../lib/intake-server';
+import {adminContext,canReadIntake,serverClient} from '../../../lib/intake-server';
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='GET'){res.setHeader('Allow',['GET']);return res.status(405).json({error:'METHOD_NOT_ALLOWED'});}
@@ -8,6 +8,7 @@ export default async function handler(req,res){
   const db=serverClient();
   const {data:record,error}=await db.from('intake_cases').select('*').eq('id',id).eq('organization_id',admin.organizationId).maybeSingle();
   if(error)throw error;if(!record)return res.status(404).json({error:'CASE_NOT_FOUND'});
+  if(!canReadIntake(admin,record.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
   const {data:notes,error:noteError}=await db.from('intake_notes').select('id,body,old_status,new_status,created_at').eq('case_id',id).eq('organization_id',admin.organizationId).order('created_at',{ascending:true});
   if(noteError)throw noteError;
   let imageUrl=null;
