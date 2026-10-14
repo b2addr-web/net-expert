@@ -45,7 +45,7 @@ export default async function handler(req,res){
     const since=new Date(Date.now()-30*86400000).toISOString();
     const [checks,incidents]=await Promise.all([
      db.from('monitor_checks').select('checked_at,result,http_status,response_ms,error_type').eq('organization_id',org).eq('site_id',site.id).gte('checked_at',since).order('checked_at',{ascending:false}).limit(10000),
-     db.from('monitor_incidents').select('id,started_at,ended_at,duration_seconds,reason').eq('organization_id',org).eq('site_id',site.id).gte('started_at',since).order('started_at',{ascending:false}).limit(1000)
+     db.from('monitor_incidents').select('id,started_at,ended_at,duration_seconds,reason').eq('organization_id',org).eq('site_id',site.id).or(`started_at.gte.${since},ended_at.gte.${since},ended_at.is.null`).order('started_at',{ascending:false}).limit(1000)
     ]);
     if(checks.error||incidents.error)throw checks.error||incidents.error;
     return res.status(200).json({site,checks:checks.data,incidents:incidents.data});
