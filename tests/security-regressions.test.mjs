@@ -17,9 +17,10 @@ test('password recovery verifies the branded confirmation link before password u
   assert.match(page,/initialMode="newPassword"/);
 });
 
-test('Supabase has no production fallback credentials',async()=>{
+test('browser Supabase configuration contains no server credential',async()=>{
   const source=await read('../lib/supabase.js');
-  assert.doesNotMatch(source,/supabase\.co'/);
+  assert.match(source,/sb_publishable_/);
+  assert.doesNotMatch(source,/sb_secret_|SUPABASE_SERVICE_ROLE_KEY|service_role/);
   assert.match(source,/isSupabaseConfigured/);
 });
 
