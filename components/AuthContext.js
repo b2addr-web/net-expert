@@ -121,6 +121,25 @@ export function AuthProvider({ children }) {
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
 
+  useEffect(() => {
+    if (!supabase || !user?.id || !user.organization_id || user.status !== 'active' || user.accountLoading || recoveryMode) return undefined;
+    let active = true;
+    let lastSent = 0;
+    const markVisible = async () => {
+      if (!active || document.visibilityState !== 'visible' || Date.now() - lastSent < 60000) return;
+      lastSent = Date.now();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!active || !session?.access_token) return;
+        await fetch('/api/organization/presence', { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } });
+      } catch { /* Presence is optional and must not interrupt sign-in. */ }
+    };
+    markVisible();
+    const timer = window.setInterval(markVisible, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', markVisible);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', markVisible); };
+  }, [user?.id, user?.organization_id, user?.status, user?.accountLoading, recoveryMode]);
+
   const retryProfile = async () => {
     const { data: { user: authUser }, error } = await supabase.auth.getUser();
     if (error || !authUser) { setUser(null); throw error || new Error('SESSION_EXPIRED'); }

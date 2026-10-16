@@ -35,6 +35,22 @@ export default async function handler(req,res){
   }
   const body=req.body||{};
   if(req.method==='POST'){
+   if(body.action==='delete_case'){
+    if(admin.role!=='company_admin')return res.status(403).json({error:'ADMIN_REQUIRED'});
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(body.caseId||'')))return res.status(400).json({error:'INVALID_FIELDS'});
+    const {data:record,error:readError}=await db.from('intake_cases').select('id,attachment_path').eq('id',body.caseId).eq('organization_id',org).eq('kind','report').maybeSingle();
+    if(readError)throw readError;
+    if(!record)return res.status(404).json({error:'CASE_NOT_FOUND'});
+    const {data:deleted,error:deleteError}=await db.from('intake_cases').delete().eq('id',record.id).eq('organization_id',org).eq('kind','report').select('id').maybeSingle();
+    if(deleteError)throw deleteError;
+    if(!deleted)return res.status(404).json({error:'CASE_NOT_FOUND'});
+    let attachmentRemoved=true;
+    if(record.attachment_path?.startsWith(`${org}/${record.id}/`)){
+     const {error:storageError}=await db.storage.from('intake-images').remove([record.attachment_path]);
+     if(storageError){attachmentRemoved=false;console.error('Deleted report attachment cleanup failed',{code:storageError.code||'STORAGE_FAILED'});}
+    }else if(record.attachment_path)attachmentRemoved=false;
+    return res.status(200).json({ok:true,attachmentRemoved});
+   }
    if(body.action==='create_link'){
     if(!['report','device_request'].includes(body.kind)||!validText(body.label,100))return res.status(400).json({error:'INVALID_FIELDS'});
     if(!canWriteIntake(admin,body.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});

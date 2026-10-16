@@ -16,7 +16,8 @@ const english={
  'تفاصيل الحالة':'Case details','إغلاق':'Close','الاسم':'Name','الرقم الوظيفي':'Employee number','البريد':'Email','نوع المشكلة':'Issue type','نوع الجهاز':'Device type','الوصف':'Description',
  'الصورة المرفقة':'Attached image','فتح الصورة بحجمها الكامل':'Open full-size image','تعذر عرض الصورة حالياً. أعد فتح البلاغ لتجديد الرابط.':'The image is unavailable. Reopen the case to refresh its link.',
  'الملاحظات والتغييرات':'Notes and changes','ملاحظة داخلية':'Internal note','إضافة ملاحظة':'Add note',
- 'تم تحديث الحالة وإرسال تنبيه للموظف.':'Status updated and employee notified.','تم تحديث الحالة، لكن تعذر إرسال التنبيه.':'Status updated, but the email notification could not be sent.','تعذر إكمال العملية':'Could not complete the operation.'
+ 'تم تحديث الحالة وإرسال تنبيه للموظف.':'Status updated and employee notified.','تم تحديث الحالة، لكن تعذر إرسال التنبيه.':'Status updated, but the email notification could not be sent.','تعذر إكمال العملية':'Could not complete the operation.',
+ 'حذف البلاغ':'Delete report','هل تريد حذف هذا البلاغ نهائياً؟':'Permanently delete this report?','تم حذف البلاغ.':'Report deleted.','تم حذف البلاغ، لكن تعذر حذف صورته من التخزين.':'Report deleted, but its image could not be removed from storage.'
 };
 const names={
  ar:{report:'البلاغات',device_request:'طلبات الأجهزة'},
@@ -59,6 +60,10 @@ export default function IntakeDashboard({kind,user,ar}){
   setDetail(await api('GET',`details?id=${encodeURIComponent(selected.id)}`));
  });
  const addNote=()=>act(async()=>{await api('POST','admin',{action:'note',caseId:selected.id,note});setNote('');setDetail(await api('GET',`details?id=${encodeURIComponent(selected.id)}`))});
+ const deleteReport=()=>{
+  if(!window.confirm(tr('هل تريد حذف هذا البلاغ نهائياً؟')))return;
+  act(async()=>{const result=await api('POST','admin',{action:'delete_case',caseId:selected.id});setDetail(null);setSelected(null);setNotice(tr(result.attachmentRemoved?'تم حذف البلاغ.':'تم حذف البلاغ، لكن تعذر حذف صورته من التخزين.'))});
+ };
  const list=data.cases.filter(x=>x.kind===kind),links=data.links.filter(x=>x.kind===kind);
  const filtered=list.filter(x=>(!query||[x.reference,x.employee_name,x.employee_number,x.email,x.description].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))&&(!status||x.status===status)&&(!department||x.department===department)&&(!from||x.created_at.slice(0,10)>=from)&&(!to||x.created_at.slice(0,10)<=to));
  return <div className="work-page intake-dashboard" dir={ar?'rtl':'ltr'}>
@@ -73,6 +78,6 @@ export default function IntakeDashboard({kind,user,ar}){
   {detail&&<div className="work-overlay"><section className="work-details intake-details" role="dialog" aria-modal="true" aria-label={tr('تفاصيل الحالة')}><header><h2>{detail.record.reference}</h2><button onClick={()=>{setDetail(null);setSelected(null)}} aria-label={tr('إغلاق')}>×</button></header><dl>{[['الاسم',detail.record.employee_name],['الرقم الوظيفي',detail.record.employee_number],['البريد',detail.record.email],['القسم',detail.record.department],[kind==='report'?'نوع المشكلة':'نوع الجهاز',detail.record.issue_type||detail.record.device_type],['الوصف',detail.record.description]].map(([k,v])=><div key={k}><dt>{tr(k)}</dt><dd>{v}</dd></div>)}</dl>
    {detail.imageUrl&&<div className="intake-image"><h3>{tr('الصورة المرفقة')}</h3><a href={detail.imageUrl} target="_blank" rel="noreferrer" aria-label={tr('فتح الصورة بحجمها الكامل')}><img src={detail.imageUrl} alt={`${tr('الصورة المرفقة')} ${detail.record.reference}`}/></a><a href={detail.imageUrl} target="_blank" rel="noreferrer">{tr('فتح الصورة بحجمها الكامل')}</a></div>}
    {detail.imageUnavailable&&<p role="alert" className="work-error">{tr('تعذر عرض الصورة حالياً. أعد فتح البلاغ لتجديد الرابط.')}</p>}
-   <label>{tr('الحالة')}<select value={detail.record.status} disabled={!canManage} onChange={e=>updateStatus(e.target.value)}>{statuses[kind].map(x=><option key={x} value={x}>{tr(x)}</option>)}</select></label><h3>{tr('الملاحظات والتغييرات')}</h3>{detail.notes.map(x=><p className="intake-note" key={x.id}><small>{new Date(x.created_at).toLocaleString(locale)}</small>{x.body}</p>)}{canManage&&<><textarea rows={3} maxLength={3000} placeholder={tr('ملاحظة داخلية')} value={note} onChange={e=>setNote(e.target.value)}/><button className="work-primary" disabled={!note.trim()} onClick={addNote}>{tr('إضافة ملاحظة')}</button></>}</section></div>}
+   <label>{tr('الحالة')}<select value={detail.record.status} disabled={!canManage} onChange={e=>updateStatus(e.target.value)}>{statuses[kind].map(x=><option key={x} value={x}>{tr(x)}</option>)}</select></label><h3>{tr('الملاحظات والتغييرات')}</h3>{detail.notes.map(x=><p className="intake-note" key={x.id}><small>{new Date(x.created_at).toLocaleString(locale)}</small>{x.body}</p>)}{canManage&&<><textarea rows={3} maxLength={3000} placeholder={tr('ملاحظة داخلية')} value={note} onChange={e=>setNote(e.target.value)}/><button className="work-primary" disabled={!note.trim()} onClick={addNote}>{tr('إضافة ملاحظة')}</button></>}{kind==='report'&&user.role==='company_admin'&&<footer><button className="intake-delete" onClick={deleteReport}>{tr('حذف البلاغ')}</button></footer>}</section></div>}
  </div>;
 }
