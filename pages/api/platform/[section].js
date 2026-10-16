@@ -46,8 +46,8 @@ export default async function handler(req,res){
     if(error)throw error;if(!site)return res.status(404).json({error:'NOT_FOUND'});
     const period=['1d','7d','30d'].includes(req.query.period)?req.query.period:'1d';
     const days=period==='1d'?1:period==='7d'?7:30, since=new Date(Date.now()-days*86400000).toISOString();
-    const page=Number(req.query.page||0),size=Number(req.query.size||100);
-    if(!integer(page,0,1000)||![100,1000].includes(size))return res.status(400).json({error:'INVALID_PAGE'});
+    const page=Number(req.query.page||0),size=Number(req.query.size||100),incidentPage=Number(req.query.incident_page||0);
+    if(!integer(page,0,1000)||![100,1000].includes(size)||!integer(incidentPage,0,10000))return res.status(400).json({error:'INVALID_PAGE'});
     const status=['online','degraded','down'].includes(req.query.status)?req.query.status:null;
     const q=String(req.query.q||'').trim().toLowerCase();
     if(q.length>40||!/^[a-z0-9:_-]*$/.test(q))return res.status(400).json({error:'INVALID_SEARCH'});
@@ -58,14 +58,15 @@ export default async function handler(req,res){
      const checks=await checksQuery;if(checks.error)throw checks.error;
      return res.status(200).json({checks:checks.data,checkCount:checks.count});
     }
-    const [checks,incidents,rollup,alerts]=await Promise.all([
+    const [checks,incidents,rollup,alerts,siteStats]=await Promise.all([
      checksQuery,
-     db.from('monitor_incidents').select('id,started_at,ended_at,duration_seconds,reason,resolution_note,note_updated_at').eq('organization_id',org).eq('site_id',site.id).or(`started_at.gte.${new Date(Date.now()-30*86400000).toISOString()},ended_at.gte.${new Date(Date.now()-30*86400000).toISOString()},ended_at.is.null`).order('started_at',{ascending:false}).limit(1000),
+     db.from('monitor_incidents').select('id,started_at,ended_at,duration_seconds,reason,resolution_note,note_updated_at',{count:'exact'}).eq('organization_id',org).eq('site_id',site.id).order('started_at',{ascending:false}).range(incidentPage*50,incidentPage*50+49),
      db.rpc('monitor_check_rollup',{p_org:org,p_site:site.id,p_since:since,p_bucket_minutes:period==='1d'?60:period==='7d'?360:1440}),
-     db.from('platform_notification_log').select('kind,recipient_email,status,sent_at,last_error,created_at').eq('organization_id',org).eq('resource_id',site.id).order('created_at',{ascending:false}).limit(20)
+     db.from('platform_notification_log').select('kind,recipient_email,status,sent_at,last_error,created_at').eq('organization_id',org).eq('resource_id',site.id).order('created_at',{ascending:false}).limit(20),
+     db.from('monitor_site_statistics').select('downtime_24h_seconds,downtime_7d_seconds,downtime_30d_seconds').eq('organization_id',org).eq('site_id',site.id).maybeSingle()
     ]);
-    if(checks.error||incidents.error||rollup.error||alerts.error)throw checks.error||incidents.error||rollup.error||alerts.error;
-    return res.status(200).json({site,checks:checks.data,checkCount:checks.count,incidents:incidents.data,rollup:rollup.data,alerts:alerts.data,period,page});
+    if(checks.error||incidents.error||rollup.error||alerts.error||siteStats.error)throw checks.error||incidents.error||rollup.error||alerts.error||siteStats.error;
+    return res.status(200).json({site,checks:checks.data,checkCount:checks.count,incidents:incidents.data,incidentCount:incidents.count,incidentPage,downtime:siteStats.data,rollup:rollup.data,alerts:alerts.data,period,page});
    }
    const {data,error}=await db.from(table).select('*').eq('organization_id',org).order('created_at',{ascending:false}).limit(1000);
    if(error)throw error;
