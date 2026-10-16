@@ -6,7 +6,30 @@ import SmartSelect from './SmartSelect';
 import {RecordMetadata,QuickCell,BulkEditor,VersionHistory,quickFields} from './RecordEditing';
 import {useRouter} from 'next/router';
 
-export function Charts({module,rows,ar}){return <div className="work-charts">{modules[module].charts.map(([key,en,arabic,mode])=>{const sums={};rows.forEach(r=>{if(!r[key])return;if(mode==='spend'&&r.status==='Cancelled')return;const k=mode?String(r[key]).slice(0,7):r[key];sums[k]=(sums[k]||0)+(mode==='spend'?Number(r.estimated_cost||0):1)});const entries=Object.entries(sums).sort((a,b)=>mode?a[0].localeCompare(b[0]):b[1]-a[1]);const max=Math.max(1,...entries.map(x=>x[1]));return <section key={key}><h3>{ar?arabic:en}</h3>{entries.length?<div className="bar-list">{entries.map(([name,n])=><div key={name}><span>{name}</span><div><i style={{width:`${n/max*100}%`}}/></div><b>{n.toLocaleString(ar?'ar':'en')}</b></div>)}</div>:<p className="work-muted">{ar?'لا توجد بيانات بعد':'No data yet'}</p>}</section>})}</div>}
+const chartColors=['#0f6cbd','#17a6a0','#7b66ca','#e0a042','#5b8bd1','#d47b91','#71a676','#805caa'];
+const chartNumber=(value,ar)=>value.toLocaleString(ar?'ar-SA':'en-US');
+function CategoryChart({title,entries,ar,donut=false}){
+ const total=entries.reduce((sum,[,count])=>sum+count,0),max=Math.max(1,...entries.map(([,count])=>count));
+ const slices=entries.reduce((state,[,count],index)=>{const end=state.offset+count/total*100;state.parts.push(`${chartColors[index%chartColors.length]} ${state.offset}% ${end}%`);state.offset=end;return state},{offset:0,parts:[]}).parts;
+ return <section className="work-chart-card"><div className="work-chart-heading"><h3>{title}</h3><span>{chartNumber(total,ar)} {ar?'سجل':'records'}</span></div>{entries.length?donut?<div className="work-donut-layout"><div className="work-donut" role="img" aria-label={entries.map(([name,count])=>`${name}: ${count}`).join(', ')} style={{background:`conic-gradient(${slices.join(',')})`}}><div><strong>{chartNumber(total,ar)}</strong><small>{ar?'الإجمالي':'Total'}</small></div></div><div className="work-chart-legend">{entries.map(([name,count],index)=><div key={name}><i style={{background:chartColors[index%chartColors.length]}}/><span title={name}>{name}</span><b>{chartNumber(count,ar)} <small>({Math.round(count/total*100)}%)</small></b></div>)}</div></div>:<div className="work-chart-bars">{entries.map(([name,count],index)=><div className="work-chart-bar" key={name}><div><span title={name}>{name}</span><b>{chartNumber(count,ar)} <small>· {Math.round(count/total*100)}%</small></b></div><div className="work-chart-track"><i style={{width:`${count/max*100}%`,background:chartColors[index%chartColors.length]}}/></div></div>)}</div>:<p className="work-muted">{ar?'لا توجد بيانات بعد':'No data yet'}</p>}</section>;
+}
+function MonthlyChart({title,rows,keyName,ar}){
+ const sums=new Map();
+ rows.forEach(row=>{const month=String(row[keyName]||'').slice(0,7);if(/^\d{4}-(0[1-9]|1[0-2])$/.test(month))sums.set(month,(sums.get(month)||0)+1)});
+ const entries=[...sums].sort(([a],[b])=>a.localeCompare(b)),max=Math.max(1,...entries.map(([,count])=>count));
+ return <section className="work-chart-card"><div className="work-chart-heading"><h3>{title}</h3><span>{chartNumber(entries.reduce((sum,[,count])=>sum+count,0),ar)} {ar?'عهدة مؤرخة':'dated records'}</span></div>{entries.length?<div className="work-monthly-chart" role="img" aria-label={entries.map(([month,count])=>`${month}: ${count}`).join(', ')}>{entries.map(([month,count])=><div className="work-month" key={month} title={`${month}: ${chartNumber(count,ar)}`}><b>{chartNumber(count,ar)}</b><div><i style={{height:`${Math.max(5,count/max*100)}%`}}/></div><small>{new Date(`${month}-01T00:00:00Z`).toLocaleDateString(ar?'ar-SA-u-ca-gregory':'en-US',{month:'short',year:'2-digit',timeZone:'Asia/Riyadh'})}</small></div>)}</div>:<p className="work-muted">{ar?'لا توجد بيانات مؤرخة بعد':'No dated records yet'}</p>}</section>;
+}
+export function Charts({module,rows,ar}){
+ if(module==='sim'||module==='assets')return <div className="work-charts work-charts-modern">{modules[module].charts.map(([key,en,arabic,mode],index)=>{
+  const title=ar?arabic:en;
+  if(mode==='month')return <MonthlyChart key={key} title={title} rows={rows} keyName={key} ar={ar}/>;
+  const sums=new Map();
+  rows.forEach(row=>{const name=String(row[key]||'').trim()||(ar?'غير محدد':'Unspecified');sums.set(name,(sums.get(name)||0)+1)});
+  const entries=[...sums].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+  return <CategoryChart key={key} title={title} entries={entries} ar={ar} donut={index===0}/>;
+ })}</div>;
+ return <div className="work-charts">{modules[module].charts.map(([key,en,arabic,mode])=>{const sums={};rows.forEach(r=>{if(!r[key])return;if(mode==='spend'&&r.status==='Cancelled')return;const k=mode?String(r[key]).slice(0,7):r[key];sums[k]=(sums[k]||0)+(mode==='spend'?Number(r.estimated_cost||0):1)});const entries=Object.entries(sums).sort((a,b)=>mode?a[0].localeCompare(b[0]):b[1]-a[1]);const max=Math.max(1,...entries.map(x=>x[1]));return <section key={key}><h3>{ar?arabic:en}</h3>{entries.length?<div className="bar-list">{entries.map(([name,n])=><div key={name}><span>{name}</span><div><i style={{width:`${n/max*100}%`}}/></div><b>{n.toLocaleString(ar?'ar':'en')}</b></div>)}</div>:<p className="work-muted">{ar?'لا توجد بيانات بعد':'No data yet'}</p>}</section>})}</div>;
+}
 export function RecordForm({module,record,user,ar,onClose,onSaved}){
  const [form,setForm]=useState(record||{attachments:[]}),[error,setError]=useState(''),[saving,setSaving]=useState(false),[uploading,setUploading]=useState(false);const panel=useRef();const config=modules[module];const router=useRouter();const [leave,setLeave]=useState(false);const pending=useRef(null);const initial=useRef(JSON.stringify(record||{attachments:[]}));const dirty=JSON.stringify(form)!==initial.current;const allowLeave=useRef(false);const closeRef=useRef();const busyRef=useRef(false);busyRef.current=saving||uploading;
  const close=()=>{if(dirty){pending.current=null;setLeave(true)}else onClose()};
