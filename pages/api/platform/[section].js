@@ -1,5 +1,6 @@
 import {adminContext,serverClient} from '../../../lib/intake-server';
 import {normalizeMonitorUrl} from '../../../lib/monitor-probe';
+import {sendAlert} from '../../../lib/platform-jobs';
 
 const tables={subscriptions:'service_subscriptions',monitoring:'monitor_sites',inventory:'inventory_items'};
 const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -21,8 +22,9 @@ function parseInput(section,body){
  }
  if(section==='monitoring'){
   const parsed=normalizeMonitorUrl(body.url);
-  if(!text(body.name,160,true)||!text(body.description??'',2000)||![5,10,15,30,60].includes(body.check_interval_minutes)||!integer(body.slow_threshold_ms,100,30000)||typeof body.enabled!=='boolean'||!text(body.hosting_provider??'',160)||!optionalDate(body.hosting_expires_on??null)||!optionalDate(body.domain_expires_manual??null))throw new Error('INVALID_FIELDS');
-  return {name:trimmed(body.name),url:parsed.url,domain_name:parsed.domain,description:body.description??'',check_interval_minutes:body.check_interval_minutes,slow_threshold_ms:body.slow_threshold_ms,enabled:body.enabled,hosting_provider:body.hosting_provider??'',hosting_expires_on:body.hosting_expires_on||null,domain_expires_manual:body.domain_expires_manual||null};
+  const emails=body.alert_emails??[];
+  if(!text(body.name,160,true)||!text(body.description??'',2000)||![1,5,10,15,30,60].includes(body.check_interval_minutes)||!integer(body.slow_threshold_ms,100,30000)||typeof body.enabled!=='boolean'||!text(body.hosting_provider??'',160)||!optionalDate(body.hosting_expires_on??null)||!optionalDate(body.domain_expires_manual??null)||body.expected_content!==null&&body.expected_content!==undefined&&!text(body.expected_content,200,true)||!Array.isArray(emails)||emails.length>10||emails.some(x=>typeof x!=='string'||x.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)))throw new Error('INVALID_FIELDS');
+  return {name:trimmed(body.name),url:parsed.url,domain_name:parsed.domain,description:body.description??'',check_interval_minutes:body.check_interval_minutes,slow_threshold_ms:body.slow_threshold_ms,enabled:body.enabled,hosting_provider:body.hosting_provider??'',hosting_expires_on:body.hosting_expires_on||null,domain_expires_manual:body.domain_expires_manual||null,expected_content:body.expected_content?.trim()||null,alert_emails:[...new Set(emails.map(x=>x.trim().toLowerCase()))]};
  }
  throw new Error('INVALID_SECTION');
 }
@@ -42,13 +44,28 @@ export default async function handler(req,res){
     if(!uuid(req.query.id))return res.status(400).json({error:'INVALID_ID'});
     const {data:site,error}=await db.from(table).select('*').eq('organization_id',org).eq('id',req.query.id).maybeSingle();
     if(error)throw error;if(!site)return res.status(404).json({error:'NOT_FOUND'});
-    const since=new Date(Date.now()-30*86400000).toISOString();
-    const [checks,incidents]=await Promise.all([
-     db.from('monitor_checks').select('checked_at,result,http_status,response_ms,error_type').eq('organization_id',org).eq('site_id',site.id).gte('checked_at',since).order('checked_at',{ascending:false}).limit(10000),
-     db.from('monitor_incidents').select('id,started_at,ended_at,duration_seconds,reason').eq('organization_id',org).eq('site_id',site.id).or(`started_at.gte.${since},ended_at.gte.${since},ended_at.is.null`).order('started_at',{ascending:false}).limit(1000)
+    const period=['1d','7d','30d'].includes(req.query.period)?req.query.period:'1d';
+    const days=period==='1d'?1:period==='7d'?7:30, since=new Date(Date.now()-days*86400000).toISOString();
+    const page=Number(req.query.page||0),size=Number(req.query.size||100);
+    if(!integer(page,0,1000)||![100,1000].includes(size))return res.status(400).json({error:'INVALID_PAGE'});
+    const status=['online','degraded','down'].includes(req.query.status)?req.query.status:null;
+    const q=String(req.query.q||'').trim().toLowerCase();
+    if(q.length>40||!/^[a-z0-9:_-]*$/.test(q))return res.status(400).json({error:'INVALID_SEARCH'});
+    let checksQuery=db.from('monitor_checks').select('checked_at,result,http_status,response_ms,error_type',{count:'exact'}).eq('organization_id',org).eq('site_id',site.id).gte('checked_at',since).order('checked_at',{ascending:false}).range(page*size,page*size+size-1);
+    if(status)checksQuery=checksQuery.eq('result',status);
+    if(q)checksQuery=/^\d{3}$/.test(q)?checksQuery.eq('http_status',Number(q)):['online','degraded','down'].includes(q)?checksQuery.eq('result',q):checksQuery.ilike('error_type',`%${q}%`);
+    if(req.query.checks_only==='1'){
+     const checks=await checksQuery;if(checks.error)throw checks.error;
+     return res.status(200).json({checks:checks.data,checkCount:checks.count});
+    }
+    const [checks,incidents,rollup,alerts]=await Promise.all([
+     checksQuery,
+     db.from('monitor_incidents').select('id,started_at,ended_at,duration_seconds,reason,resolution_note,note_updated_at').eq('organization_id',org).eq('site_id',site.id).or(`started_at.gte.${new Date(Date.now()-30*86400000).toISOString()},ended_at.gte.${new Date(Date.now()-30*86400000).toISOString()},ended_at.is.null`).order('started_at',{ascending:false}).limit(1000),
+     db.rpc('monitor_check_rollup',{p_org:org,p_site:site.id,p_since:since,p_bucket_minutes:period==='1d'?60:period==='7d'?360:1440}),
+     db.from('platform_notification_log').select('kind,recipient_email,status,sent_at,last_error,created_at').eq('organization_id',org).eq('resource_id',site.id).order('created_at',{ascending:false}).limit(20)
     ]);
-    if(checks.error||incidents.error)throw checks.error||incidents.error;
-    return res.status(200).json({site,checks:checks.data,incidents:incidents.data});
+    if(checks.error||incidents.error||rollup.error||alerts.error)throw checks.error||incidents.error||rollup.error||alerts.error;
+    return res.status(200).json({site,checks:checks.data,checkCount:checks.count,incidents:incidents.data,rollup:rollup.data,alerts:alerts.data,period,page});
    }
    const {data,error}=await db.from(table).select('*').eq('organization_id',org).order('created_at',{ascending:false}).limit(1000);
    if(error)throw error;
@@ -63,6 +80,18 @@ export default async function handler(req,res){
    return res.status(200).json({items:data,stats,job});
   }
   const body=req.body||{};
+  if(section==='monitoring'&&req.method==='POST'&&body.action==='test_alert'){
+   if(access.role!=='company_admin'||!uuid(body.id))return res.status(403).json({error:'NOT_AUTHORIZED'});
+   const {data:site,error}=await db.from('monitor_sites').select('id,name,url,alert_emails').eq('organization_id',org).eq('id',body.id).maybeSingle();
+   if(error)throw error;if(!site)return res.status(404).json({error:'NOT_FOUND'});
+   const result=await sendAlert(db,{organizationId:org,kind:'monitor_test',resourceId:site.id,eventKey:`test:${new Date().toISOString().slice(0,13)}`,subject:`NetExpert — اختبار تنبيهات ${site.name}`,body:`رسالة اختبار لمراقبة ${site.name} (${site.url}).`,extraRecipients:site.alert_emails||[]});
+   return result.sent?res.status(200).json(result):res.status(429).json({error:result.recipients?'TEST_ALREADY_SENT_THIS_HOUR':'NO_ALERT_RECIPIENTS'});
+  }
+  if(section==='monitoring'&&req.method==='PATCH'&&body.action==='incident_note'){
+   if(access.role!=='company_admin'||!uuid(body.id)||!uuid(body.incident_id)||!text(body.resolution_note??'',3000))return res.status(403).json({error:'NOT_AUTHORIZED'});
+   const {data,error}=await db.from('monitor_incidents').update({resolution_note:body.resolution_note.trim()||null,note_updated_at:new Date().toISOString(),note_updated_by:access.user.id}).eq('organization_id',org).eq('site_id',body.id).eq('id',body.incident_id).select('id').maybeSingle();
+   if(error)throw error;return data?res.status(200).json({ok:true}):res.status(404).json({error:'NOT_FOUND'});
+  }
   if(req.method==='POST'){
    const payload=parseInput(section,body);
    const {data,error}=await db.from(table).insert({...payload,organization_id:org,created_by:access.user.id}).select('*').single();
@@ -76,7 +105,13 @@ export default async function handler(req,res){
   }
   if(!integer(body.version,1,2147483647))return res.status(400).json({error:'INVALID_VERSION'});
   const payload=parseInput(section,body);
-  const {data,error}=await db.from(table).update({...payload,version:body.version+1,updated_at:new Date().toISOString(),...(section==='monitoring'&&payload.url?{last_checked_at:null,domain_checked_at:null,check_lease_until:null}:{} )}).eq('organization_id',org).eq('id',body.id).eq('version',body.version).select('*').maybeSingle();
+  let monitorReset={};
+  if(section==='monitoring'){
+   const {data:previous,error:readError}=await db.from(table).select('url').eq('organization_id',org).eq('id',body.id).maybeSingle();
+   if(readError)throw readError;
+   if(previous?.url!==payload.url)monitorReset={last_checked_at:null,domain_checked_at:null,check_lease_until:null};
+  }
+  const {data,error}=await db.from(table).update({...payload,...monitorReset,version:body.version+1,updated_at:new Date().toISOString()}).eq('organization_id',org).eq('id',body.id).eq('version',body.version).select('*').maybeSingle();
   if(error){if(error.code==='23505')return res.status(409).json({error:'DUPLICATE_ITEM'});throw error}
   return data?res.status(200).json({item:data}):res.status(409).json({error:'RECORD_CHANGED'});
  }catch(error){
