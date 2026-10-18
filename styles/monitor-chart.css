@@ -1,0 +1,17 @@
+.monitor-plot{position:relative;box-sizing:border-box;width:100%;min-width:0;overflow:hidden;padding:0;border:1px solid #dce6ef;border-radius:10px;background:#fff}
+.monitor-plot svg{display:block;box-sizing:border-box;width:100%;min-width:0;max-width:100%;height:auto;overflow:visible;font-family:inherit}
+.monitor-grid-line{stroke:#e7eef5;stroke-width:1;shape-rendering:crispEdges}
+.monitor-tick-line{stroke:#a9bac9;stroke-width:1}
+.monitor-axis-label{fill:#64748b;stroke:none;font-size:11px;font-weight:500;direction:ltr}
+.monitor-axis-title{fill:#52677c;stroke:none;font-size:11px;font-weight:600}
+.monitor-line{fill:none;stroke:#1378b9;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.monitor-point{fill:#fff;stroke:#1378b9;stroke-width:1.8;vector-effect:non-scaling-stroke}
+.monitor-point.active,.monitor-point-hit:focus+.monitor-point{fill:#1378b9;stroke:#fff}
+.monitor-point-hit{fill:transparent;stroke:none;cursor:pointer}
+.monitor-plot g[role=button]{outline:none}
+.monitor-plot g[role=button]:focus-visible .monitor-point{fill:#1378b9;stroke:#0b5a93;stroke-width:3}
+.monitor-tooltip{position:absolute;z-index:2;box-sizing:border-box;width:188px;display:grid;gap:4px;padding:10px 12px;border:1px solid #c8dae9;border-radius:8px;background:#fff;box-shadow:0 8px 24px #123e6324;color:#213b54;font-size:11px;line-height:1.45;pointer-events:none;text-align:start}
+.monitor-tooltip strong{font-size:11px;color:#123e63}.monitor-tooltip span{white-space:nowrap}
+.monitor-chart-caption{padding:8px 12px 10px;border-top:1px solid #eef2f6;color:#64748b;font-size:11px;text-align:start;direction:ltr}
+.monitor-chart-empty{padding:18px 16px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fbfe;text-align:center}
+@media(max-width:480px){.monitor-axis-label{font-size:10px}.monitor-tooltip{font-size:10px}.monitor-chart-caption{font-size:10px}}
