@@ -4,6 +4,7 @@ import '../styles/import.css';
 import '../styles/intake.css';
 import '../styles/platform.css';
 import '../styles/monitoring.css';
+import '../styles/monitor-chart.css';
 import '../styles/dashboard-charts.css';
 import { AuthProvider } from '../components/AuthContext';
 import { ThemeProvider } from '../components/ThemeContext';
