@@ -34,7 +34,7 @@ async function loadHome(keys,org){
  }));
  return result;
 }
-function grouped(rows,field){return Object.entries((rows||[]).reduce((result,row)=>{const value=String(row[field]||'').trim();if(value)result[value]=(result[value]||0)+1;return result},{})).sort((a,b)=>b[1]-a[1])}
+function grouped(rows,field,ar){return Object.entries((rows||[]).reduce((result,row)=>{const value=String(row[field]||'').trim()||label(ar,'غير محدد','Unspecified');result[value]=(result[value]||0)+1;return result},{})).sort((a,b)=>b[1]-a[1])}
 
 function Bars({title,values,ar,source}){
  const total=values.reduce((sum,[,count])=>sum+count,0);
@@ -79,9 +79,9 @@ export default function HomePanel({user,ar,navigation,onNavigate}){
  const keys=sources.filter(key=>labels[key]);const signature=keys.join(',');
  const [data,setData]=useState({});
  useEffect(()=>{let alive=true;setData({});loadHome(keys,user.organization_id).then(value=>{if(alive)setData(value)});return()=>{alive=false}},[user.organization_id,signature]);
- const departments=useMemo(()=>grouped(data.assets?.rows,'department'),[data.assets]);
- const devices=useMemo(()=>grouped(data.assets?.rows,'hardware'),[data.assets]);
- const reports=useMemo(()=>grouped(data.report?.rows,'status'),[data.report]);
+ const departments=useMemo(()=>grouped(data.assets?.rows,'department',ar),[data.assets,ar]);
+ const devices=useMemo(()=>grouped(data.assets?.rows,'hardware',ar),[data.assets,ar]);
+ const reports=useMemo(()=>grouped(data.report?.rows,'status',ar),[data.report,ar]);
  const activity=useMemo(()=>recentEvents(data,ar),[data,ar]);
  const alerts=useMemo(()=>attentionItems(data,ar),[data,ar]);
  const loading=keys.some(key=>!data[key]);const unavailable=keys.some(key=>data[key]?.rows===null);
