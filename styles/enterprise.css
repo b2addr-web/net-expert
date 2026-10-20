@@ -55,8 +55,9 @@
 .enterprise-home-heading small{color:#67819f;font-size:11px}
 .enterprise-home-heading h1{margin:3px 0 0;font-size:23px;font-weight:700;color:var(--ne-ink)}
 .enterprise-home-heading time{padding:8px 10px;border:1px solid var(--ne-line);border-radius:7px;background:#fff;color:#7790ad;font-size:11px}
-.enterprise-home-banner{min-height:150px;display:flex;align-items:center;justify-content:flex-end;padding:21px 30px;overflow:hidden;border-radius:13px;background:linear-gradient(90deg,#06183288,#06183233),url('/images/netexpert-banner.png') center/cover;color:#fff}
+.enterprise-home-banner{min-height:150px;display:flex;align-items:center;justify-content:flex-start;direction:ltr;padding:21px 30px;overflow:hidden;border-radius:13px;background:linear-gradient(90deg,#06183288,#06183233),url('/images/netexpert-banner.png') center/cover;color:#fff}
 .enterprise-home-banner>div{max-width:520px;text-align:start}
+.enterprise-home[dir=rtl] .enterprise-home-banner>div{direction:rtl}
 .enterprise-home-banner small{color:#9ed1ff;font-size:12px;font-weight:600}
 .enterprise-home-banner h2{margin:4px 0 6px;font-size:23px;line-height:1.35}
 .enterprise-home-banner p{margin:0;color:#deecfc;font-size:13px;line-height:1.9}
