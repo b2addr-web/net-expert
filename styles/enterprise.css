@@ -107,8 +107,8 @@
  .workspace-app .enterprise-home{padding:16px 13px 25px}
  .enterprise-home-heading time{display:none}
  .enterprise-home-heading h1{font-size:20px}
- .enterprise-home-banner{min-height:152px;padding:19px 17px;background-position:58% center}
- .enterprise-home-banner>div{max-width:68%}
+ .enterprise-home-banner{min-height:180px;padding:18px 16px;background-image:linear-gradient(90deg,#061832ee 0%,#061832cf 54%,#06183255 82%),url('/images/netexpert-banner.png');background-position:center}
+ .enterprise-home-banner>div{max-width:56%}
  .enterprise-home-banner h2{font-size:19px}
  .enterprise-home-banner p{font-size:11.5px}
  .enterprise-home-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
