@@ -59,6 +59,7 @@ begin
 end $$;
 create trigger knowledge_folders_stamp before insert or update on public.knowledge_folders
 for each row execute function public.knowledge_folder_stamp();
+revoke all on function public.knowledge_folder_stamp() from public;
 
 create policy knowledge_folders_read on public.knowledge_folders for select to authenticated
  using (organization_id=public.current_organization_id() and created_by=(select auth.uid()) and public.has_section_access('files'));
@@ -107,6 +108,7 @@ begin
 end $$;
 create trigger knowledge_items_stamp before insert or update on public.knowledge_items
 for each row execute function public.knowledge_item_stamp();
+revoke all on function public.knowledge_item_stamp() from public;
 
 drop policy knowledge_read on public.knowledge_items;
 create policy knowledge_read on public.knowledge_items for select to authenticated
