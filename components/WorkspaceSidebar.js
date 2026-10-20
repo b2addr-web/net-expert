@@ -5,7 +5,7 @@ export const sidebarGroups=[
  {key:'operations',en:'Operations',ar:'العمليات',icon:'operations',items:['report','device_request','purchasing']},
  {key:'assets',en:'Assets & inventory',ar:'الأصول والمخزون',icon:'assets',items:['assets','sim','inventory']},
  {key:'services',en:'Services & monitoring',ar:'الخدمات والمتابعة',icon:'services',items:['subscriptions','monitoring']},
- {key:'knowledge',en:'Knowledge & documentation',ar:'المعرفة والتوثيق',icon:'knowledge',items:['notes']},
+ {key:'knowledge',en:'Knowledge & documentation',ar:'المعرفة والتوثيق',icon:'knowledge',items:['notes','files']},
  {key:'management',en:'Reports & administration',ar:'التقارير والإدارة',icon:'management',items:['reports','exports','administration']},
 ];
 
@@ -24,6 +24,7 @@ const iconPaths={
  subscriptions:<><path d="M4 7h16v13H4zM8 3v8M16 3v8M4 11h16M8 15h4"/></>,
  monitoring:<><circle cx="12" cy="12" r="9"/><path d="M3 12h4l2-3 3 6 2-3h7"/></>,
  notes:<><path d="M5 3h10l4 4v14H5zM15 3v4h4M8 12h8M8 16h6"/></>,
+ files:<><path d="M3 6h7l2 3h9v11H3z"/><path d="M3 9h18"/></>,
  reports:<><path d="M4 20V9M10 20V4M16 20v-8M22 20H2"/></>,
  exports:<><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></>,
  administration:<><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2z"/></>,
