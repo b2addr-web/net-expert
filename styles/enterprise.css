@@ -1,0 +1,120 @@
+.workspace-app{--ne-navy:#0a1d3a;--ne-blue:#1769e8;--ne-ink:#10243f;--ne-muted:#71809a;--ne-line:#e5ebf2;--ne-page:#f3f6fb;--ne-card:#fff;min-height:100vh;background:var(--ne-page);color:var(--ne-ink)}
+.workspace-app button:focus-visible,.workspace-app a:focus-visible,.workspace-app select:focus-visible{outline:3px solid #7fb2ff;outline-offset:2px}
+
+/* Existing navigation keeps its groups, order, permissions and routes. */
+.workspace-app .sidebar-organized{width:248px;padding:19px 15px 15px;background:linear-gradient(180deg,#0e284c,#081931);border:0;color:#d7e6fb;z-index:40;transition:width .2s ease}
+.workspace-app .sidebar-organized .workspace-brand{gap:10px;padding:3px 8px 20px;margin-bottom:11px;border-bottom:1px solid #ffffff1a;color:#fff;font-size:17px;font-weight:700;letter-spacing:-.035em}
+.workspace-app .sidebar-organized .workspace-brand>b{width:37px;height:37px;flex:none;background:linear-gradient(145deg,#22a9ff,#1357db);border-radius:10px;box-shadow:0 7px 16px #00143166;font-size:23px;font-style:italic}
+.workspace-app .sidebar-organized .workspace-brand small{color:#a5bad5;font-size:10px;letter-spacing:0}
+.workspace-app .sidebar-organized nav{padding:0;scrollbar-width:thin;scrollbar-color:#456183 transparent}
+.workspace-app .sidebar-organized nav button{min-height:39px;border-radius:9px;padding:8px 11px;color:#c7d8ed;gap:9px;font-size:12.5px;line-height:1.4}
+.workspace-app .sidebar-organized nav button:hover{background:#ffffff15;color:#fff}
+.workspace-app .sidebar-organized nav button.active{background:#236fea;color:#fff;font-weight:650}
+.workspace-app .sidebar-organized .sidebar-home{min-height:44px;margin-bottom:11px;font-size:13px}
+.workspace-app .sidebar-group{margin:2px 0}
+.workspace-app .sidebar-organized nav .sidebar-group-toggle{color:#e7f1ff;font-size:13px;font-weight:700;gap:8px}
+.workspace-app .sidebar-group.has-active>.sidebar-group-toggle{background:#ffffff10;color:#fff}
+.workspace-app .sidebar-organized .sidebar-group-toggle .sidebar-text{flex:0 1 auto}
+.workspace-app .sidebar-organized .sidebar-chevron{width:15px;height:15px;flex:none;color:#dce9f9;opacity:.9;transition:transform .18s ease}
+.workspace-app .sidebar-organized .sidebar-children-inner{padding-inline-start:21px}
+.workspace-app .sidebar-organized nav .sidebar-child{min-height:36px;padding:7px 10px;color:#b8cce5;font-size:12.5px}
+.workspace-app .sidebar-organized nav .sidebar-child.active{color:#fff}
+.workspace-app .sidebar-organized .sidebar-collapse-control{min-height:39px;border:1px solid #ffffff18;border-radius:9px;background:#ffffff0b;color:#c9d9eb;font-size:12px}
+.workspace-app .sidebar-organized .sidebar-collapse-control:hover{background:#ffffff19;color:#fff}
+.workspace-app .sidebar-organized.sidebar-collapsed{width:65px;padding-inline:8px}
+.workspace-app .sidebar-collapsed .workspace-brand{padding-inline:5px}
+.workspace-app .sidebar-collapsed .sidebar-group-toggle .sidebar-text{display:none}
+.workspace-app .sidebar-collapsed .sidebar-children{display:none}
+
+/* Shared topbar retains the existing search, language, account and workspace actions. */
+.workspace-app .enterprise-topbar{height:70px;display:grid;grid-template-columns:minmax(145px,1fr) minmax(220px,500px) minmax(170px,1fr);gap:18px;align-items:center;padding:0 27px;background:#fff;border-bottom:1px solid var(--ne-line);z-index:30}
+.enterprise-topbar-start,.enterprise-topbar-actions{display:flex;align-items:center;gap:10px;min-width:0}
+.enterprise-topbar-actions{justify-self:end}
+.enterprise-workspace-name{display:grid;gap:2px;min-width:0}
+.enterprise-workspace-name strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.enterprise-workspace-name small{font-size:10px;color:var(--ne-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.workspace-app .enterprise-search{height:38px;width:100%;min-width:0;display:flex;align-items:center;gap:9px;padding:0 12px;margin:0;background:#f8fafc;border:1px solid var(--ne-line);border-radius:9px;color:#7589a5;text-align:start;font-size:12px;white-space:nowrap}
+.workspace-app .enterprise-search span{flex:1;overflow:hidden;text-overflow:ellipsis}
+.enterprise-search svg{width:17px;height:17px}
+.enterprise-search kbd{padding:3px 5px;border:0;border-radius:4px;background:#edf2f8;color:#95a3b7;font:10px Inter,sans-serif}
+.workspace-app .enterprise-language,.workspace-app .enterprise-mobile-menu{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--ne-line);border-radius:9px;background:#fff;color:#526986;font-size:12px;font-weight:700}
+.workspace-app .enterprise-mobile-menu{display:none}
+.workspace-app .enterprise-account-trigger{display:flex;align-items:center;gap:8px;min-height:38px;padding:0;border:0;background:none;color:var(--ne-ink);max-width:240px;text-align:start}
+.enterprise-avatar{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#2a80f3,#1051bd);color:#fff;font-size:12px;font-weight:700}
+.enterprise-account-name{min-width:0;display:grid;gap:1px}
+.enterprise-account-name strong,.enterprise-account-name small{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.enterprise-account-name strong{font-size:12px}
+.enterprise-account-name small{font-size:10px;color:var(--ne-muted)}
+.enterprise-account-trigger>svg{width:14px;height:14px;color:#8fa1b9}
+.workspace-app .enterprise-account-menu{top:61px;inset-inline-end:20px;border:1px solid var(--ne-line);border-radius:10px;box-shadow:0 15px 35px #19376020}
+.workspace-mobile-scrim{display:none}
+
+/* Approved home composition. Counts are loaded from the existing authorized sources. */
+.workspace-app .enterprise-home{padding:22px 26px 34px;max-width:1660px}
+.enterprise-home-heading{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:15px}
+.enterprise-home-heading small{color:#67819f;font-size:11px}
+.enterprise-home-heading h1{margin:3px 0 0;font-size:23px;font-weight:700;color:var(--ne-ink)}
+.enterprise-home-heading time{padding:8px 10px;border:1px solid var(--ne-line);border-radius:7px;background:#fff;color:#7790ad;font-size:11px}
+.enterprise-home-banner{min-height:150px;display:flex;align-items:center;justify-content:flex-end;padding:21px 30px;overflow:hidden;border-radius:13px;background:linear-gradient(90deg,#06183288,#06183233),url('/images/netexpert-banner.png') center/cover;color:#fff}
+.enterprise-home-banner>div{max-width:520px;text-align:start}
+.enterprise-home-banner small{color:#9ed1ff;font-size:12px;font-weight:600}
+.enterprise-home-banner h2{margin:4px 0 6px;font-size:23px;line-height:1.35}
+.enterprise-home-banner p{margin:0;color:#deecfc;font-size:13px;line-height:1.9}
+.enterprise-home-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:14px 0}
+.workspace-app .enterprise-home-metric{min-width:0;min-height:128px;display:flex;flex-direction:column;justify-content:space-between;padding:14px 13px 13px;border:1px solid var(--ne-line);border-radius:11px;background:#fff;box-shadow:0 7px 25px #1a33590c;text-align:start;color:var(--ne-ink)}
+.workspace-app .enterprise-home-metric:hover{border-color:#bcd5fb;box-shadow:0 10px 28px #1a33591b}
+.enterprise-home-metric-top{display:flex;align-items:start;justify-content:space-between;gap:5px;min-height:30px;font-size:11.5px;font-weight:650;line-height:1.4;color:#51647e}
+.enterprise-home-metric-top i{width:27px;height:27px;flex:none;display:grid;place-items:center;border-radius:7px;background:#e9f2ff;color:#2c75ec;font-style:normal}
+.enterprise-home-metric-top svg{width:16px;height:16px}
+.enterprise-home-metric strong{display:block;margin:8px 0 5px;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.enterprise-home-metric small{min-height:30px;color:#91a0b2;font-size:10px;line-height:1.5}
+.enterprise-home-panels{display:grid;grid-template-columns:1.4fr 1fr;gap:13px}
+.enterprise-home-panel{min-width:0;padding:17px;border:1px solid var(--ne-line);border-radius:12px;background:#fff;box-shadow:0 7px 25px #1a33590c}
+.enterprise-home-panel header h2{margin:0 0 3px;font-size:14px;color:var(--ne-ink)}
+.enterprise-home-panel header p{margin:0;color:#92a0b1;font-size:11px}
+.enterprise-home-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:17px}
+.enterprise-home-links h3{margin:0 0 7px;font-size:11px;color:#607792}
+.workspace-app .enterprise-home-links button{width:100%;min-height:36px;display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid transparent;border-radius:7px;background:#f8fafd;color:#395371;text-align:start;font-size:12px}
+.workspace-app .enterprise-home-links button:hover{border-color:#cbdffd;background:#edf5ff;color:#0f64d8}
+.enterprise-home-links button span:nth-child(2){flex:1}
+.enterprise-home-links svg{width:15px;height:15px}
+.enterprise-home-chart-guide>div{min-height:235px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;text-align:center;color:#6c839f}
+.enterprise-home-chart-guide>div svg{width:28px;height:28px;color:#78a4dd}
+.enterprise-home-chart-guide>div p{max-width:300px;margin:0;font-size:12px;line-height:1.8}
+
+@media(max-width:1280px){.enterprise-home-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1100px){.workspace-app .enterprise-topbar{grid-template-columns:minmax(105px,1fr) minmax(180px,2fr) minmax(130px,1fr);gap:11px}.enterprise-account-name{display:none}}
+@media(max-width:950px){.workspace-app .sidebar-organized{width:210px}.enterprise-home-panels{grid-template-columns:1fr}}
+@media(max-width:700px){
+ .workspace-app{display:block}
+ .workspace-app .sidebar-organized,.workspace-app .sidebar-organized.sidebar-collapsed{position:fixed;top:0;inset-inline-start:0;width:min(285px,85vw);height:100vh;padding:19px 15px 15px;transform:translateX(110%);visibility:hidden;box-shadow:-18px 0 30px #071b3830;z-index:70}
+ .workspace-app[dir=ltr] .sidebar-organized,.workspace-app[dir=ltr] .sidebar-organized.sidebar-collapsed{transform:translateX(-110%)}
+ .workspace-app .sidebar-organized.sidebar-mobile-open{transform:translateX(0)!important;visibility:visible}
+ .workspace-app .sidebar-organized nav{display:block;max-height:none;flex:1;overflow-y:auto;margin:0;padding:0}
+ .workspace-app .sidebar-organized .workspace-brand{padding:3px 8px 20px;margin-bottom:11px}
+ .workspace-app .sidebar-organized .sidebar-text,.workspace-app .sidebar-organized.sidebar-collapsed .sidebar-text{display:block}
+ .workspace-app .sidebar-organized .sidebar-children,.workspace-app .sidebar-organized.sidebar-collapsed .sidebar-children{display:grid}
+ .workspace-app .sidebar-organized nav button,.workspace-app .sidebar-organized.sidebar-collapsed nav button{justify-content:flex-start;padding:8px 11px;white-space:normal}
+ .workspace-mobile-scrim{display:block;position:fixed;inset:0;z-index:60;border:0;background:#07172b88}
+ .workspace-app .enterprise-topbar{height:60px;min-height:60px;display:flex;gap:8px;flex-wrap:nowrap;padding:0 13px}
+ .workspace-app .enterprise-mobile-menu{display:grid;flex:none}
+ .enterprise-workspace-name,.enterprise-account-name,.enterprise-account-trigger>svg{display:none}
+ .workspace-app .enterprise-search{width:auto;flex:1;min-width:35px;height:34px}
+ .workspace-app .enterprise-search span,.enterprise-search kbd{display:none}
+ .enterprise-topbar-actions{justify-self:auto;gap:5px}
+ .workspace-app .enterprise-account-menu{top:56px;inset-inline-end:12px}
+ .workspace-app .enterprise-home{padding:16px 13px 25px}
+ .enterprise-home-heading time{display:none}
+ .enterprise-home-heading h1{font-size:20px}
+ .enterprise-home-banner{min-height:152px;padding:19px 17px;background-position:58% center}
+ .enterprise-home-banner>div{max-width:68%}
+ .enterprise-home-banner h2{font-size:19px}
+ .enterprise-home-banner p{font-size:11.5px}
+ .enterprise-home-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .workspace-app .enterprise-home-metric{min-height:122px;padding:11px}
+ .enterprise-home-metric-top{font-size:10px}
+ .enterprise-home-metric strong{font-size:24px}
+ .enterprise-home-metric small{font-size:9px}
+ .enterprise-home-links{grid-template-columns:1fr}
+}
+@media(prefers-reduced-motion:reduce){.workspace-app .sidebar-organized,.workspace-app .sidebar-organized nav button,.workspace-app .sidebar-chevron{transition:none}}
