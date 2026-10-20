@@ -1,5 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {platformRequest,canManagePlatform,displayDate} from '../lib/platform-client';
+import {availableCustody} from '../lib/custody';
+import CustodyInventory from './CustodyInventory';
 
 const categories=['أجهزة لابتوب','أجهزة كمبيوتر مكتبية','شاشات','لوحات مفاتيح','فأرات','طابعات','ملحقات وكابلات','أجهزة شبكات','أخرى'];
 const empty={name:'',category:categories[0],brand:'',model:'',quantity:0,min_quantity:0,storage_location:'',sku:'',notes:''};
@@ -8,12 +10,12 @@ const field=(name,control)=><label className="platform-field"><span>{name}</span
 
 export default function InventoryPanel({user,ar}){
  const t=labels[ar?'ar':'en'],canManage=canManagePlatform(user);
- const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[form,setForm]=useState(null),[custom,setCustom]=useState(false),[query,setQuery]=useState(''),[category,setCategory]=useState(''),[below,setBelow]=useState(''),[busy,setBusy]=useState(false);
- const load=async()=>{setLoading(true);try{setItems((await platformRequest('inventory')).items);setError('')}catch(e){setError(e.message)}finally{setLoading(false)}};
+ const [items,setItems]=useState([]),[custody,setCustody]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[form,setForm]=useState(null),[custom,setCustom]=useState(false),[query,setQuery]=useState(''),[category,setCategory]=useState(''),[below,setBelow]=useState(''),[busy,setBusy]=useState(false);
+ const load=async()=>{setLoading(true);try{const [stock,returned]=await Promise.all([platformRequest('inventory'),availableCustody()]);setItems(stock.items);setCustody(returned);setError('')}catch(e){setError(e.message)}finally{setLoading(false)}};
  useEffect(()=>{load()},[user.organization_id]);
  const filtered=useMemo(()=>items.filter(x=>(!query||`${x.name} ${x.brand} ${x.model} ${x.sku||''}`.toLowerCase().includes(query.toLowerCase()))&&(!category||x.category===category)&&(below===''||x.quantity<Number(below))),[items,query,category,below]);
- const sum=kind=>items.filter(x=>x.category===kind).reduce((a,x)=>a+x.quantity,0);
- const metrics=[[t.totalTypes,items.length],[t.totalUnits,items.reduce((a,x)=>a+x.quantity,0)],[t.laptops,sum(categories[0])],[t.screens,sum(categories[2])],[t.keyboards,sum(categories[3])],[t.mice,sum(categories[4])]];
+ const sum=(kind,hardware)=>items.filter(x=>x.category===kind).reduce((a,x)=>a+x.quantity,0)+custody.filter(x=>x.module==='assets'&&x.item_name?.toLowerCase()===hardware).length;
+ const metrics=[[t.totalTypes,items.length+custody.length],[t.totalUnits,items.reduce((a,x)=>a+x.quantity,0)+custody.length],[t.laptops,sum(categories[0],'laptop')],[t.screens,sum(categories[2],'monitor')],[t.keyboards,sum(categories[3],'keyboard')],[t.mice,sum(categories[4],'mouse')]];
  const set=(key,value)=>setForm(prev=>({...prev,[key]:value}));
  const save=async e=>{e.preventDefault();setBusy(true);try{await platformRequest('inventory',form.id?'PATCH':'POST',{...form,quantity:Number(form.quantity),min_quantity:Number(form.min_quantity)});setForm(null);setNotice(t.saved);await load()}catch(err){setError(err.message)}finally{setBusy(false)}};
  const remove=async x=>{if(!confirm(t.confirm))return;setBusy(true);try{await platformRequest('inventory','DELETE',{id:x.id});setNotice(t.removed);await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
@@ -23,6 +25,7 @@ export default function InventoryPanel({user,ar}){
   <div className="work-metrics">{metrics.map(([k,v])=><section key={k}><span>{k}</span><strong>{v}</strong></section>)}</div>
   <div className="work-filters"><input aria-label={t.search} placeholder={t.search} value={query} onChange={e=>setQuery(e.target.value)}/><select aria-label={t.category} value={category} onChange={e=>setCategory(e.target.value)}><option value="">{t.all}</option>{[...new Set([...categories,...items.map(x=>x.category)])].sort().map(x=><option key={x}>{x}</option>)}</select><label>{t.less}<input type="number" min="0" value={below} onChange={e=>setBelow(e.target.value)}/></label></div>
   <div className="work-grid"><table><thead><tr>{[t.name,t.category,t.model,t.quantity,t.location,t.updated,t.actions].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td>{x.name}{x.quantity<x.min_quantity&&<span className="platform-status expired">{t.low}</span>}</td><td>{x.category}</td><td>{x.model||'—'}</td><td><div className="platform-actions">{canManage&&<button disabled={busy||x.quantity===0} aria-label={`-${x.name}`} onClick={()=>adjust(x,-1)}>−</button>}<b>{x.quantity}</b>{canManage&&<button disabled={busy} aria-label={`+${x.name}`} onClick={()=>adjust(x,1)}>+</button>}</div></td><td>{x.storage_location||'—'}</td><td>{displayDate(x.updated_at,ar)}</td><td>{canManage&&<div className="platform-actions"><button onClick={()=>{setForm({...x,sku:x.sku||''});setCustom(!categories.includes(x.category))}}>{t.edit}</button><button disabled={busy} onClick={()=>remove(x)}>{t.delete}</button></div>}</td></tr>)}</tbody></table>{loading?<p className="work-empty">{t.loading}</p>:!filtered.length&&<p className="work-empty">{t.none}</p>}</div>
+  <CustodyInventory items={custody} user={user} ar={ar} query={query} onRefresh={load}/>
   {form&&<div className="work-overlay"><form className="work-form platform-form" onSubmit={save}><header><h2>{form.id?t.edit:t.add}</h2><button type="button" onClick={()=>setForm(null)} aria-label={t.cancel}>×</button></header><div className="work-form-body"><div className="platform-fields">
    {field(t.name,<input required maxLength={160} value={form.name} onChange={e=>set('name',e.target.value)}/>)}
    {field(t.category,<><select value={custom?'custom':form.category} onChange={e=>{if(e.target.value==='custom'){setCustom(true);set('category','')}else{setCustom(false);set('category',e.target.value)}}}>{categories.map(x=><option key={x}>{x}</option>)}<option value="custom">{t.custom}</option></select>{custom&&<input required maxLength={100} placeholder={t.custom} value={form.category} onChange={e=>set('category',e.target.value)}/>}</>)}
