@@ -91,6 +91,9 @@ returns trigger language plpgsql security definer set search_path=public,pg_temp
 begin
  if tg_op='INSERT' then
   new.created_by:=auth.uid(); new.created_at:=now();
+  if new.item_type='note' and new.file_path is not null and btrim(new.body)='' then
+   new.item_type:='file'; -- Old combined-page uploads remain files during rollout.
+  end if;
   select nullif(btrim(p.full_name),'') into new.author_name from public.profiles p where p.id=new.created_by;
  else
   new.organization_id:=old.organization_id; new.created_by:=old.created_by;
