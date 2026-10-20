@@ -1,5 +1,8 @@
 import '../styles/globals.css';
 import '../styles/workspace.css';
+import '../styles/sidebar.css';
+import '../styles/home.css';
+import '../styles/knowledge.css';
 import '../styles/import.css';
 import '../styles/intake.css';
 import '../styles/platform.css';

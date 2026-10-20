@@ -1,0 +1,22 @@
+.knowledge-list{display:grid;gap:12px}
+.knowledge-list article{display:flex;justify-content:space-between;gap:20px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:20px}
+.knowledge-list article>div:first-child{min-width:0}
+.knowledge-list small{color:#64748b;font-size:11px}
+.knowledge-list h2{font-size:15px;margin:9px 0;color:#1f2937}
+.knowledge-list p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 10px;font-size:13px;color:#475569}
+.knowledge-file{border:0;background:#edf5fc;color:#0f6cbd;border-radius:4px;padding:7px 10px;max-width:100%;overflow-wrap:anywhere;text-align:start}
+.knowledge-file small{margin-inline-start:6px}
+.knowledge-actions{display:flex;align-items:flex-start;gap:8px;flex:none}
+.knowledge-actions button,.knowledge-form footer button{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:4px;padding:8px 12px}
+.knowledge-success{padding:10px 14px;background:#e8f8ef;color:#11613b;border-radius:4px}
+.knowledge-form{background:#fff;width:min(620px,100%);height:100%;display:flex;flex-direction:column}
+.knowledge-form header,.knowledge-form footer{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #e5e7eb}
+.knowledge-form header h2{font-size:18px;margin:0}
+.knowledge-form header button{border:0;background:none;font-size:24px}
+.knowledge-form>div{padding:24px;overflow:auto;flex:1;display:grid;align-content:start;gap:18px}
+.knowledge-form label{display:grid;gap:7px;color:#475569;font-size:12px}
+.knowledge-form input:not([type=checkbox]),.knowledge-form textarea{width:100%;border:1px solid #cbd5e1;border-radius:4px;padding:10px;color:#1f2937}
+.knowledge-form textarea{resize:vertical}
+.knowledge-form .knowledge-share{display:flex;align-items:center;font-size:13px}
+.knowledge-form footer{justify-content:flex-end;gap:10px;border-top:1px solid #e5e7eb;border-bottom:0}
+@media(max-width:700px){.knowledge-list article{display:block}.knowledge-actions{margin-top:14px}.knowledge-form>div{padding:18px}}
