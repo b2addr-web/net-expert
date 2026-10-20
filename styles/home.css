@@ -1,0 +1,6 @@
+.home-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.home-groups section{background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:18px}
+.home-groups h2{font-size:14px;font-weight:650;color:#334155;margin:0 0 12px}
+.home-groups section>div{display:grid;gap:3px}
+.home-groups button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:4px;background:transparent;text-align:start;padding:10px;color:#475569}
+.home-groups button:hover{background:#edf5fc;color:#0f6cbd}
