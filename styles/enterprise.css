@@ -83,6 +83,27 @@
 .enterprise-home-chart-guide>div svg{width:28px;height:28px;color:#78a4dd}
 .enterprise-home-chart-guide>div p{max-width:300px;margin:0;font-size:12px;line-height:1.8}
 
+/* SIM cards: visual polish only; existing fields, charts and actions stay in place. */
+.workspace-module-sim .work-heading{margin-bottom:20px}
+.workspace-module-sim .work-heading h1{margin:6px 0;font-size:26px;font-weight:700;color:var(--ne-ink)}
+.workspace-module-sim .work-heading p{color:var(--ne-muted);font-size:13px}
+.workspace-app .workspace-module-sim .work-primary{border-radius:8px;background:var(--ne-blue);font-weight:600}
+.workspace-module-sim .work-tabs{margin-bottom:17px;border-bottom-color:var(--ne-line)}
+.workspace-module-sim .work-tabs button.active{color:var(--ne-blue);border-bottom-color:var(--ne-blue)}
+.workspace-module-sim .work-filters{gap:10px;padding:14px;margin-bottom:14px;border:1px solid var(--ne-line);border-radius:11px;background:#fff}
+.workspace-module-sim .work-filters input,.workspace-module-sim .work-filters .smart-select input{border-color:#d6e0ec;border-radius:8px;background:#fbfcfe}
+.workspace-module-sim .work-filters button{border-color:var(--ne-line);border-radius:8px}
+.workspace-module-sim .work-grid{border-color:var(--ne-line);border-radius:11px;box-shadow:0 7px 25px #1a33590c}
+.workspace-module-sim .work-grid th{background:#f5f8fc;color:#4f6682;font-size:12px}
+.workspace-module-sim .work-grid td{border-top-color:#edf1f6;font-size:12px}
+.workspace-module-sim .work-grid tr:hover td{background:#f5f9ff}
+.workspace-module-sim .work-metrics{gap:11px;margin-bottom:18px;border:0;background:transparent}
+.workspace-module-sim .work-metrics section{min-height:107px;padding:17px;border:1px solid var(--ne-line);border-radius:11px;background:#fff;box-shadow:0 7px 25px #1a33590c}
+.workspace-module-sim .work-metrics span{color:#627792;font-size:12px}
+.workspace-module-sim .work-metrics strong{color:var(--ne-ink);font-size:28px;font-weight:700}
+.workspace-module-sim .work-charts-modern .work-chart-card{border-color:var(--ne-line);border-radius:11px;background:#fff;box-shadow:0 7px 25px #1a33590c}
+.workspace-module-sim .work-pagination button{border-color:var(--ne-line);border-radius:8px}
+
 @media(max-width:1280px){.enterprise-home-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1100px){.workspace-app .enterprise-topbar{grid-template-columns:minmax(105px,1fr) minmax(180px,2fr) minmax(130px,1fr);gap:11px}.enterprise-account-name{display:none}}
 @media(max-width:950px){.workspace-app .sidebar-organized{width:210px}.enterprise-home-panels{grid-template-columns:1fr}}
