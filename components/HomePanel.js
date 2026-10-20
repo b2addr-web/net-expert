@@ -1,42 +1,96 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {supabase} from '../lib/supabase';
-import {sidebarGroups,NavIcon} from './WorkspaceSidebar';
+import {listRecords} from '../lib/workspace';
+import {remainingDays} from '../lib/platform-client';
+import {NavIcon} from './WorkspaceSidebar';
 
 const featured=['assets','sim','report','device_request','subscriptions','monitoring'];
+const sources=[...featured,'purchasing','inventory'];
+const colors=['#2677ed','#16ad87','#f0a137','#855bd9','#e86666','#36b8c7'];
+const reportEnglish={'جديد':'New','قيد المعالجة':'In progress','بانتظار إجراء':'Awaiting action','تم الحل':'Resolved','مغلق':'Closed'};
+const label=(ar,a,b)=>ar?a:b;
+const number=(n,ar)=>Number(n).toLocaleString(ar?'ar-SA':'en-US');
+const time=(value,ar)=>value?new Intl.DateTimeFormat(ar?'ar-SA-u-ca-gregory':'en-GB',{timeZone:/^\d{4}-\d{2}-\d{2}$/.test(value)?'UTC':'Asia/Riyadh',dateStyle:'medium',...(/^\d{4}-\d{2}-\d{2}$/.test(value)?{}:{timeStyle:'short'})}).format(new Date(value)):'';
 
-async function loadCounts(keys){
- const counts={};
- await Promise.all(keys.filter(key=>['assets','sim'].includes(key)).map(async key=>{
-  try{const {count,error}=await supabase.from('workspace_records').select('id',{count:'exact',head:true}).eq('module',key);if(error)throw error;counts[key]=count}
-  catch{counts[key]=null}
+async function loadCases(kind){
+ const {data}=await supabase.auth.getSession();
+ if(!data.session?.access_token)throw new Error('AUTH_REQUIRED');
+ const response=await fetch(`/api/intake/admin?kind=${kind}`,{headers:{Authorization:`Bearer ${data.session.access_token}`}});
+ if(!response.ok)throw new Error('UNAVAILABLE');
+ return (await response.json()).cases||[];
+}
+async function loadTable(key,org){
+ const table={subscriptions:'service_subscriptions',monitoring:'monitor_sites',inventory:'inventory_items'}[key];
+ const fields={subscriptions:'id,name,end_date,created_at,updated_at',monitoring:'id,name,status,enabled,ssl_status,ssl_expires_at,domain_expires_on,domain_expires_manual,hosting_expires_on,last_checked_at,created_at,updated_at',inventory:'id,name,quantity,min_quantity,created_at,updated_at'}[key];
+ const {data,error}=await supabase.from(table).select(fields).eq('organization_id',org).order('updated_at',{ascending:false}).limit(1000);
+ if(error)throw error;
+ return data||[];
+}
+async function loadHome(keys,org){
+ const result={};
+ await Promise.all(keys.map(async key=>{
+  try{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);result[key]={rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length}}
+  catch{result[key]={rows:null,count:null}}
  }));
- const intakeKeys=keys.filter(key=>['report','device_request'].includes(key));
- if(intakeKeys.length){
-  const session=await supabase.auth.getSession().catch(()=>({data:null}));
-  const token=session.data?.session?.access_token;
-  await Promise.all(intakeKeys.map(async key=>{
-   if(!token){counts[key]=null;return}
-   try{const response=await fetch(`/api/intake/admin?kind=${encodeURIComponent(key)}`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error('UNAVAILABLE');const result=await response.json();const size=result.cases?.length;counts[key]=typeof size==='number'?(size>=1000?'≥1000':size):null}
-   catch{counts[key]=null}
-  }));
+ return result;
+}
+function grouped(rows,field){return Object.entries((rows||[]).reduce((result,row)=>{const value=String(row[field]||'').trim();if(value)result[value]=(result[value]||0)+1;return result},{})).sort((a,b)=>b[1]-a[1])}
+
+function Bars({title,values,ar,source}){
+ const total=values.reduce((sum,[,count])=>sum+count,0);
+ return <section className="enterprise-home-panel enterprise-home-chart"><header><h3>{title}</h3><span>{total?number(total,ar):''}</span></header>{values.length?<div className="enterprise-home-bars">{values.slice(0,6).map(([name,count],index)=><div className="enterprise-home-bar" key={name}><div><span title={name}>{name}</span><b>{number(count,ar)}</b></div><div className="enterprise-home-bar-track" role="img" aria-label={`${name}: ${number(count,ar)}`}><i style={{width:`${count/values[0][1]*100}%`,background:colors[index%colors.length]}}/></div></div>)}{values.length>6&&<small>{label(ar,`و${number(values.length-6,ar)} فئات أخرى`,`and ${number(values.length-6,ar)} more categories`)}</small>}</div>:<p className="enterprise-home-empty">{source===undefined?label(ar,'جارٍ تحميل الرسم…','Loading chart…'):source===null?label(ar,'بيانات الرسم غير متاحة الآن.','Chart data is unavailable.'):label(ar,'لا توجد بيانات كافية لعرض الرسم.','Not enough data for this chart.')}</p>}</section>;
+}
+function Donut({values,ar,source}){
+ const total=values.reduce((sum,[,count])=>sum+count,0);let end=0;
+ const gradient=values.map(([,count],index)=>{const start=end;end+=count/total*100;return `${colors[index%colors.length]} ${start}% ${end}%`}).join(',');
+ return <section className="enterprise-home-panel enterprise-home-chart"><header><h3>{label(ar,'البلاغات حسب الحالة','Reports by status')}</h3><span>{total?number(total,ar):''}</span></header>{total?<div className="enterprise-home-donut-wrap"><div className="enterprise-home-donut" style={{background:`conic-gradient(${gradient})`}} role="img" aria-label={label(ar,`${number(total,ar)} بلاغ`,`${number(total,ar)} reports`)}><div><strong>{number(total,ar)}</strong><small>{label(ar,'بلاغ','Reports')}</small></div></div><ul>{values.map(([name,count],index)=><li key={name}><i style={{background:colors[index%colors.length]}}/><span>{ar?name:reportEnglish[name]||name}</span><b>{number(count,ar)}</b></li>)}</ul></div>:<p className="enterprise-home-empty">{source===undefined?label(ar,'جارٍ تحميل الرسم…','Loading chart…'):source===null?label(ar,'بيانات الرسم غير متاحة الآن.','Chart data is unavailable.'):label(ar,'لا توجد بيانات كافية لعرض الرسم.','Not enough data for this chart.')}</p>}</section>;
+}
+function recentEvents(data,ar){
+ const events=[];
+ for(const key of sources)for(const row of data[key]?.rows||[]){
+  const changed=row.updated_at&&row.created_at&&Date.parse(row.updated_at)-Date.parse(row.created_at)>60000;
+  const when=changed?row.updated_at:row.created_at;
+  if(!when||Number.isNaN(Date.parse(when)))continue;
+  const title=row.reference||row.employee_name||row.request_number||row.name||row.serial_number||row.sim_number||label(ar,'سجل','Record');
+  const kind={assets:['الأجهزة التقنية','Devices'],sim:['شرائح الاتصال','SIM cards'],purchasing:['المشتريات','Purchasing'],report:['البلاغات','Reports'],device_request:['طلبات الأجهزة','Device requests'],subscriptions:['الاشتراكات','Subscriptions'],monitoring:['مراقبة المواقع','Monitoring'],inventory:['المخزون التقني','IT inventory']}[key];
+  events.push({id:`${key}-${row.id}`,when,key,title,description:`${kind[ar?0:1]} · ${label(ar,changed?'تحديث':'إضافة',changed?'Updated':'Added')}`,actor:changed?row.updated_by_name:row.created_by_name});
  }
- await Promise.all(keys.filter(key=>['subscriptions','monitoring'].includes(key)).map(async key=>{
-  try{const table=key==='subscriptions'?'service_subscriptions':'monitor_sites';const {count,error}=await supabase.from(table).select('id',{count:'exact',head:true});if(error)throw error;counts[key]=count}
-  catch{counts[key]=null}
- }));
- return counts;
+ return events.sort((a,b)=>Date.parse(b.when)-Date.parse(a.when)).slice(0,6);
+}
+function attentionItems(data,ar){
+ const items=[];const add=(key,id,title,description,priority,when)=>items.push({key,id,title,description,priority,when});
+ for(const row of data.report?.rows||[])if(!['تم الحل','مغلق'].includes(row.status))add('report',row.id,row.reference||label(ar,'بلاغ','Report'),`${ar?row.status:reportEnglish[row.status]||row.status}${row.issue_type?` · ${row.issue_type}`:''}`,row.status==='بانتظار إجراء'?'high':'medium',row.updated_at||row.created_at);
+ for(const row of data.subscriptions?.rows||[]){const days=remainingDays(row.end_date);if(days!==null&&days>=0&&days<=14)add('subscriptions',row.id,row.name,label(ar,`ينتهي خلال ${number(days,ar)} يوم`,`Expires in ${number(days,ar)} days`),'medium',row.end_date)}
+ for(const row of data.monitoring?.rows||[]){
+  if(!row.enabled)continue;
+  if(['down','degraded'].includes(row.status))add('monitoring',`${row.id}-status`,row.name,label(ar,row.status==='down'?'الموقع متعطل':'استجابة الموقع بطيئة',row.status==='down'?'Website down':'Slow response'),row.status==='down'?'high':'medium',row.last_checked_at);
+  if(row.ssl_status==='invalid')add('monitoring',`${row.id}-ssl`,row.name,label(ar,'مشكلة في شهادة SSL','SSL certificate issue'),'high',row.last_checked_at);
+  for(const [field,arabic,english] of [['ssl_expires_at','شهادة SSL','SSL certificate'],['domain_expires_on','الدومين','Domain'],['hosting_expires_on','الاستضافة','Hosting']]){
+   const value=field==='domain_expires_on'?row.domain_expires_manual||row.domain_expires_on:row[field];const days=remainingDays(value);
+   if(days!==null&&days>=0&&days<=30)add('monitoring',`${row.id}-${field}`,row.name,label(ar,`${arabic} ينتهي خلال ${number(days,ar)} يوم`,`${english} expires in ${number(days,ar)} days`),'medium',value);
+  }
+ }
+ for(const row of data.inventory?.rows||[])if(Number(row.min_quantity)>0&&Number(row.quantity)<=Number(row.min_quantity))add('inventory',row.id,row.name,label(ar,`الكمية ${number(row.quantity,ar)} · الحد الأدنى ${number(row.min_quantity,ar)}`,`Quantity ${number(row.quantity,ar)} · minimum ${number(row.min_quantity,ar)}`),'medium',row.updated_at);
+ return items.sort((a,b)=>(a.priority==='high'?0:1)-(b.priority==='high'?0:1)||Date.parse(b.when||0)-Date.parse(a.when||0)).slice(0,7);
 }
 
 export default function HomePanel({user,ar,navigation,onNavigate}){
  const labels=Object.fromEntries(navigation.map(([key,en,arabic])=>[key,ar?arabic:en]));
- const available=featured.filter(key=>labels[key]);
- const [counts,setCounts]=useState({});
- useEffect(()=>{let alive=true;setCounts({});loadCounts(available).then(value=>{if(alive)setCounts(value)}).catch(()=>{if(alive)setCounts(Object.fromEntries(available.map(key=>[key,null])))});return()=>{alive=false}},[user.organization_id,navigation.map(([key])=>key).join(',')]);
- const format=value=>value===undefined?'…':value===null?'—':typeof value==='number'?value.toLocaleString(ar?'ar-SA':'en-US'):value;
+ const keys=sources.filter(key=>labels[key]);const signature=keys.join(',');
+ const [data,setData]=useState({});
+ useEffect(()=>{let alive=true;setData({});loadHome(keys,user.organization_id).then(value=>{if(alive)setData(value)});return()=>{alive=false}},[user.organization_id,signature]);
+ const departments=useMemo(()=>grouped(data.assets?.rows,'department'),[data.assets]);
+ const devices=useMemo(()=>grouped(data.assets?.rows,'hardware'),[data.assets]);
+ const reports=useMemo(()=>grouped(data.report?.rows,'status'),[data.report]);
+ const activity=useMemo(()=>recentEvents(data,ar),[data,ar]);
+ const alerts=useMemo(()=>attentionItems(data,ar),[data,ar]);
+ const loading=keys.some(key=>!data[key]);const unavailable=keys.some(key=>data[key]?.rows===null);
+ const count=key=>!data[key]?'…':data[key].count===null?'—':typeof data[key].count==='number'?number(data[key].count,ar):data[key].count;
  return <div className="work-page home-panel enterprise-home" dir={ar?'rtl':'ltr'}>
-  <div className="enterprise-home-heading"><div><small>{user.organization_name}</small><h1>{ar?'الصفحة الرئيسية':'Home'}</h1></div><time>{new Intl.DateTimeFormat(ar?'ar-SA-u-ca-gregory':'en-GB',{timeZone:'Asia/Riyadh',dateStyle:'full'}).format(new Date())}</time></div>
-  <section className="enterprise-home-banner"><div><small>{ar?'مساحة عمل NetExpert':'NetExpert workspace'}</small><h2>{ar?'مرحبًا بك في مساحة عملك':'Welcome to your workspace'}</h2><p>{ar?'إدارة أعمال تقنية المعلومات ومتابعة الأجهزة والطلبات والبلاغات، بكل سهولة من مكان واحد.':'Manage IT work, devices, requests and reports from one place.'}</p></div></section>
-  {available.length>0&&<section className="enterprise-home-metrics" aria-label={ar?'مؤشرات الأقسام':'Section totals'}>{available.map(key=><button type="button" key={key} className="enterprise-home-metric" onClick={()=>onNavigate(key)}><span className="enterprise-home-metric-top"><span>{labels[key]}</span><i><NavIcon name={key}/></i></span><strong>{format(counts[key])}</strong><small>{counts[key]===undefined?(ar?'جارٍ تحميل البيانات':'Loading data'):counts[key]===null?(ar?'البيانات غير متاحة الآن':'Data unavailable'):(ar?'من سجلات القسم الحالية':'From current section records')}</small></button>)}</section>}
-  <div className="enterprise-home-panels"><section className="enterprise-home-panel"><header><h2>{ar?'أقسام مساحة العمل':'Workspace sections'}</h2><p>{ar?'تظهر الأقسام المصرّح لك بها فقط.':'Only sections you can access are shown.'}</p></header><div className="enterprise-home-links">{sidebarGroups.map(group=>{const items=group.items.filter(key=>labels[key]);return items.length?<div key={group.key}><h3>{ar?group.ar:group.en}</h3>{items.map(key=><button type="button" key={key} onClick={()=>onNavigate(key)}><NavIcon name={key}/><span>{labels[key]}</span><span aria-hidden="true">←</span></button>)}</div>:null})}</div></section><section className="enterprise-home-panel enterprise-home-chart-guide"><header><h2>{ar?'لوحات المؤشرات':'Dashboards'}</h2><p>{ar?'الرسوم مرتبطة بسجلات الأقسام الفعلية.':'Charts use the sections’ existing records.'}</p></header><div><NavIcon name="reports"/><p>{ar?'افتح شرائح الاتصال أو الأجهزة التقنية أو المشتريات لعرض الرسوم والمؤشرات الحالية.':'Open SIM cards, IT devices, or Purchasing to view their existing charts and metrics.'}</p></div></section></div>
+  <div className="enterprise-home-heading"><div><small>{user.organization_name}</small><h1>{label(ar,'الصفحة الرئيسية','Home')}</h1></div><time>{new Intl.DateTimeFormat(ar?'ar-SA-u-ca-gregory':'en-GB',{timeZone:'Asia/Riyadh',dateStyle:'full'}).format(new Date())}</time></div>
+  <section className="enterprise-home-banner"><div><small>{label(ar,'مساحة عمل NetExpert','NetExpert workspace')}</small><h2>{label(ar,'مرحبًا بك في مساحة عملك','Welcome to your workspace')}</h2><p>{label(ar,'إدارة أعمال تقنية المعلومات ومتابعة الأجهزة والطلبات والبلاغات، بكل سهولة من مكان واحد.','Manage IT work, devices, requests and reports from one place.')}</p></div></section>
+  <section className="enterprise-home-metrics" aria-label={label(ar,'مؤشرات الأقسام','Section totals')}>{featured.filter(key=>labels[key]).map(key=><button type="button" key={key} className="enterprise-home-metric" onClick={()=>onNavigate(key)}><span className="enterprise-home-metric-top"><span>{labels[key]}</span><i><NavIcon name={key}/></i></span><strong>{count(key)}</strong><small>{!data[key]?label(ar,'جارٍ تحميل البيانات','Loading data'):data[key].count===null?label(ar,'البيانات غير متاحة الآن','Data unavailable'):label(ar,'من سجلات القسم الحالية','From current section records')}</small></button>)}</section>
+  <section className="enterprise-home-summary" aria-label={label(ar,'ملخص البيانات','Data summary')}><div className="enterprise-home-section-heading"><h2>{label(ar,'ملخص البيانات','Data summary')}</h2><p>{label(ar,'مؤشرات من السجلات المصرّح لك بها','Insights from sections you can access')}</p></div><div className="enterprise-home-chart-grid">{labels.assets&&<Bars title={label(ar,'الأجهزة التقنية حسب القسم','Devices by department')} values={departments} ar={ar} source={data.assets?.rows}/>} {labels.report&&<Donut values={reports} ar={ar} source={data.report?.rows}/>} {labels.assets&&<Bars title={label(ar,'الأجهزة التقنية حسب النوع','Devices by type')} values={devices} ar={ar} source={data.assets?.rows}/>}</div>{!labels.assets&&!labels.report&&<p className="enterprise-home-empty">{label(ar,'لا تتوفر بيانات رسوم من الأقسام المصرّح لك بها.','No chart data is available from your permitted sections.')}</p>}</section>
+  <div className="enterprise-home-feed"><section className="enterprise-home-panel"><header><h2>{label(ar,'النشاط الأخير','Recent activity')}</h2><p>{label(ar,'آخر السجلات والعمليات المتاحة','Latest available records and updates')}</p></header>{activity.length?<ol className="enterprise-home-list">{activity.map(item=><li key={item.id}><span className="enterprise-home-list-icon"><NavIcon name={item.key}/></span><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.actor&&<>{item.actor} · </>}{time(item.when,ar)}</small></div></li>)}</ol>:<p className="enterprise-home-empty">{loading?label(ar,'جارٍ تحميل النشاط…','Loading activity…'):unavailable?label(ar,'تعذر تحميل بعض مصادر النشاط.','Some activity sources are unavailable.'):label(ar,'لا يوجد نشاط مسجل بعد.','No activity recorded yet.')}</p>}</section><section className="enterprise-home-panel"><header><h2>{label(ar,'يتطلب الانتباه','Needs attention')}</h2><p>{label(ar,'حالات وتنبيهات من بياناتك الحالية','Items from your current data')}</p></header>{alerts.length?<ul className="enterprise-home-list enterprise-home-alerts">{alerts.map(item=><li key={`${item.key}-${item.id}`}><span className={`enterprise-home-priority ${item.priority}`}>{label(ar,item.priority==='high'?'عاجل':'متابعة',item.priority==='high'?'High':'Review')}</span><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.when?time(item.when,ar):''}</small></div></li>)}</ul>:<p className="enterprise-home-empty">{loading?label(ar,'جارٍ فحص التنبيهات…','Loading alerts…'):unavailable?label(ar,'لا تظهر تنبيهات حاليًا؛ بعض المصادر غير متاحة.','No alerts shown; some sources are unavailable.'):label(ar,'لا توجد عناصر تتطلب الانتباه حاليًا.','Nothing needs attention right now.')}</p>}</section></div>
  </div>;
 }
