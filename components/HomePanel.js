@@ -28,13 +28,11 @@ async function loadTable(key,org){
  if(error)throw error;
  return data||[];
 }
-async function loadHome(keys,org){
- const result={};
+async function loadHome(keys,org,onSource){
  await Promise.all(keys.map(async key=>{
-  try{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);result[key]={rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length}}
-  catch{result[key]={rows:null,count:null}}
+  try{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);onSource(key,{rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length})}
+  catch{onSource(key,{rows:null,count:null})}
  }));
- return result;
 }
 function grouped(rows,field,ar){return Object.entries((rows||[]).reduce((result,row)=>{const value=String(row[field]||'').trim()||label(ar,'غير محدد','Unspecified');result[value]=(result[value]||0)+1;return result},{})).sort((a,b)=>b[1]-a[1])}
 
@@ -71,7 +69,7 @@ export default function HomePanel({user,ar,navigation,onNavigate}){
  const labels=Object.fromEntries(navigation.map(([key,en,arabic])=>[key,ar?arabic:en]));
  const keys=sources.filter(key=>labels[key]);const signature=keys.join(',');
  const [data,setData]=useState({});
- useEffect(()=>{let alive=true;setData({});loadHome(keys,user.organization_id).then(value=>{if(alive)setData(value)});return()=>{alive=false}},[user.organization_id,signature]);
+ useEffect(()=>{let alive=true;setData({});loadHome(keys,user.organization_id,(key,value)=>{if(alive)setData(previous=>({...previous,[key]:value}))});return()=>{alive=false}},[user.organization_id,signature]);
  const departments=useMemo(()=>grouped(data.assets?.rows,'department',ar),[data.assets,ar]);
  const devices=useMemo(()=>grouped(data.assets?.rows,'hardware',ar),[data.assets,ar]);
  const reports=useMemo(()=>grouped(data.report?.rows,'status',ar),[data.report,ar]);
