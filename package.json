@@ -9,14 +9,22 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@tiptap/core": "2.27.2",
+    "@tiptap/extension-link": "2.27.2",
+    "@tiptap/extension-underline": "2.27.2",
+    "@tiptap/pm": "2.27.2",
+    "@tiptap/react": "2.27.2",
+    "@tiptap/starter-kit": "2.27.2",
     "exceljs": "4.4.0",
     "next": "15.5.27",
     "react": "^18",
     "react-dom": "^18",
+    "sanitize-html": "2.17.0",
     "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "autoprefixer": "^10",
+    "jsdom": "26.1.0",
     "postcss": "^8",
     "tailwindcss": "^3"
   }
