@@ -35,7 +35,7 @@ export default function IntakeDashboard({kind,user,ar}){
  const tr=value=>ar?value:english[value]||value;
  const locale=ar?'ar-SA':'en-US';
  const formatDate=value=>new Date(value).toLocaleDateString(locale);
- const displayError=value=>!ar&&/[\u0600-\u06ff]/.test(value||'')?tr('تعذر إكمال العملية'):value||tr('تعذر إكمال العملية');
+ const displayError=value=>value==='ADMIN_REQUIRED'?(ar?'هذا الحساب غير مخوّل بإدارة البلاغات أو الطلبات.':'This account cannot manage reports or device requests.'):!ar&&/[\u0600-\u06ff]/.test(value||'')?tr('تعذر إكمال العملية'):value||tr('تعذر إكمال العملية');
  const canManage=['company_admin','operator','manager'].includes(user.role);
  const [data,setData]=useState({links:[],cases:[]}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[label,setLabel]=useState('');
  const [selected,setSelected]=useState(null),[detail,setDetail]=useState(null),[note,setNote]=useState('');
@@ -69,7 +69,7 @@ export default function IntakeDashboard({kind,user,ar}){
  };
  const list=data.cases.filter(x=>x.kind===kind),links=data.links.filter(x=>x.kind===kind);
  const filtered=list.filter(x=>(!query||[x.reference,x.employee_name,x.employee_number,x.email,x.description].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))&&(!status||x.status===status)&&(!department||x.department===department)&&(!from||x.created_at.slice(0,10)>=from)&&(!to||x.created_at.slice(0,10)<=to));
- return <div className="work-page intake-dashboard" dir={ar?'rtl':'ltr'}>
+ return <div className={`work-page intake-dashboard ${error?'operations-load-error':''}`} dir={ar?'rtl':'ltr'}>
   <header className="work-heading operations-heading"><div className="operations-heading-copy"><span className="operations-heading-icon"><NavIcon name={kind}/></span><div><small>{user.organization_name}</small><h1>{names[ar?'ar':'en'][kind]}</h1><p>{tr(kind==='report'?'إدارة بلاغات الأعطال والمشكلات التقنية':'استقبال ومتابعة طلبات الأجهزة التقنية من الموظفين')}</p></div></div><button className="operations-refresh" onClick={load} disabled={loading}>{tr('تحديث')}</button></header>
   {error&&<p role="alert" className="work-error">{displayError(error)}</p>}{notice&&<p role="status" className="intake-notice">{notice}</p>}
   {!loading&&<div className="work-metrics operations-metrics">{[['الإجمالي',list.length],['جديد',list.filter(x=>x.status==='جديد').length],['قيد المتابعة',list.filter(x=>!['جديد','مغلق','مرفوض','تم الحل','تم التسليم'].includes(x.status)).length],['مغلق',list.filter(x=>x.status==='مغلق').length]].map(([name,n],i)=><section className={`operations-metric operations-metric-${i}`} key={name}><span>{tr(name)}</span><strong>{n.toLocaleString(locale)}</strong></section>)}</div>}
