@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 import {Bar,BarChart,Cell,Pie,PieChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts';
 import {NavIcon} from './WorkspaceSidebar';
 
-const palette=['#2474e7','#20a99a','#8b74df','#e6a449','#5c91c7','#b47cbd','#57a8a3'];
+const palette=['#2475e8','#4a8bea','#6b9ff0','#91b7f2'];
 const reportColors={'جديد':'#2474e7','قيد المعالجة':'#e7a23b','بانتظار إجراء':'#e27d54','تم الحل':'#19a879','مغلق':'#8a9bb0'};
 const reportEnglish={'جديد':'New','قيد المعالجة':'In progress','بانتظار إجراء':'Awaiting action','تم الحل':'Resolved','مغلق':'Closed'};
 const t=(ar,arabic,english)=>ar?arabic:english;
@@ -30,15 +30,15 @@ export function HomeBarChart({title,values,ar,source}){
  const reduced=useReducedMotion();
  const total=values.reduce((sum,[,count])=>sum+count,0);
  const max=Math.max(1,...values.map(([,count])=>count));
- return <section className="enterprise-home-panel enterprise-home-chart" aria-label={title}>
-  <header><h3>{title}</h3>{total>0&&<span>{n(total,ar)}</span>}</header>
+ return <section className="enterprise-home-panel enterprise-home-chart enterprise-home-bar-chart" aria-label={title}>
+  <header><div className="enterprise-home-chart-title"><span className="enterprise-home-chart-icon" aria-hidden="true"><NavIcon name="assets"/></span><div><h3>{title}</h3>{total>0&&<small>{t(ar,`إجمالي ${n(total,ar)} جهاز`,`Total ${n(total,ar)} devices`)}</small>}</div></div></header>
   {values.length?<div className="enterprise-home-chart-scroll"><div className="enterprise-home-bar-rows">{values.map(([name,count],index)=><div className="enterprise-home-bar-row" key={name}>
-   <span className="enterprise-home-bar-name" title={name}>{name}</span>
+   <span className="enterprise-home-bar-name">{name}</span>
    <div className="enterprise-home-bar-graphic" role="img" aria-label={`${name}: ${n(count,ar)}`}><ResponsiveContainer width="100%" height={30}>
     <BarChart data={[{name,count}]} layout="vertical" margin={{top:2,right:2,bottom:2,left:2}}>
      <XAxis type="number" domain={[0,max]} hide/><YAxis type="category" dataKey="name" hide/>
-     <Tooltip content={<ChartTooltip ar={ar}/>} cursor={false} isAnimationActive={!reduced}/>
-     <Bar dataKey="count" fill={palette[index%palette.length]} barSize={17} radius={[5,5,5,5]} isAnimationActive={!reduced} maxBarSize={17}/>
+     <Tooltip content={<ChartTooltip ar={ar}/>} cursor={false} offset={14} allowEscapeViewBox={{x:true,y:true}} isAnimationActive={!reduced}/>
+     <Bar dataKey="count" fill={palette[Math.min(index,palette.length-1)]} stroke="none" barSize={17} radius={[5,5,5,5]} isAnimationActive={!reduced} maxBarSize={17}/>
     </BarChart>
    </ResponsiveContainer></div><b>{n(count,ar)}</b>
   </div>)}</div></div>:<EmptyChart ar={ar} source={source} icon="assets"/>}
@@ -49,8 +49,8 @@ export function HomeReportDonut({values,ar,source}){
  const reduced=useReducedMotion();
  const total=values.reduce((sum,[,count])=>sum+count,0);
  const rows=values.map(([name,count],index)=>({name,count,color:reportColors[name]||palette[index%palette.length]}));
- return <section className="enterprise-home-panel enterprise-home-chart enterprise-home-report-chart" aria-label={t(ar,'البلاغات حسب الحالة','Reports by status')}>
-  <header><h3>{t(ar,'البلاغات حسب الحالة','Reports by status')}</h3>{total>0&&<span>{n(total,ar)}</span>}</header>
+ return <section className={`enterprise-home-panel enterprise-home-chart enterprise-home-report-chart${total?'':' is-empty'}`} aria-label={t(ar,'البلاغات حسب الحالة','Reports by status')}>
+  <header><div className="enterprise-home-chart-title"><span className="enterprise-home-chart-icon" aria-hidden="true"><NavIcon name="report"/></span><div><h3>{t(ar,'البلاغات حسب الحالة','Reports by status')}</h3>{total>0&&<small>{t(ar,`إجمالي ${n(total,ar)} بلاغ`,`Total ${n(total,ar)} reports`)}</small>}</div></div></header>
   {total>0?<div className="enterprise-home-report-layout"><div className="enterprise-home-pie-wrap" role="img" aria-label={t(ar,`${n(total,ar)} بلاغ`,`Total ${n(total,ar)} reports`)}>
    <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={rows} dataKey="count" nameKey="name" innerRadius="70%" outerRadius="94%" paddingAngle={rows.length>1?2:0} stroke="none" isAnimationActive={!reduced}>{rows.map(row=><Cell key={row.name} fill={row.color}/>)}</Pie><Tooltip content={<ChartTooltip ar={ar} total={total} report/>} isAnimationActive={!reduced}/></PieChart></ResponsiveContainer>
    <div className="enterprise-home-pie-center" aria-hidden="true"><strong>{n(total,ar)}</strong><small>{t(ar,'بلاغ','Reports')}</small></div>
