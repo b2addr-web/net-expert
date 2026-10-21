@@ -10,6 +10,7 @@ import '../styles/monitoring.css';
 import '../styles/monitor-chart.css';
 import '../styles/custody.css';
 import '../styles/dashboard-charts.css';
+import '../styles/enterprise.css';
 import { AuthProvider } from '../components/AuthContext';
 import { ThemeProvider } from '../components/ThemeContext';
 
