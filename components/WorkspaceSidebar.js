@@ -24,7 +24,7 @@ const iconPaths={
  subscriptions:<><path d="M4 7h16v13H4zM8 3v8M16 3v8M4 11h16M8 15h4"/></>,
  monitoring:<><circle cx="12" cy="12" r="9"/><path d="M3 12h4l2-3 3 6 2-3h7"/></>,
  notes:<><path d="M5 3h10l4 4v14H5zM15 3v4h4M8 12h8M8 16h6"/></>,
- files:<><path d="M3 6h7l2 3h9v11H3z"/><path d="M3 9h18"/></>,
+ files:<><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 11h18"/></>,
  reports:<><path d="M4 20V9M10 20V4M16 20v-8M22 20H2"/></>,
  exports:<><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></>,
  administration:<><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2z"/></>,
@@ -32,7 +32,7 @@ const iconPaths={
 
 export function NavIcon({name}){return <svg className="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{iconPaths[name]||iconPaths.operations}</svg>}
 
-export default function WorkspaceSidebar({ar,page,organizationName,navigation,onNavigate,mobileOpen=false}){
+export default function WorkspaceSidebar({ar,page,organizationName,navigation,onNavigate}){
  const labels=Object.fromEntries(navigation.map(([key,en,arabic])=>[key,ar?arabic:en]));
  const activeGroup=sidebarGroups.find(group=>group.items.includes(page))?.key;
  const [open,setOpen]=useState(()=>activeGroup?{[activeGroup]:true}:{});
@@ -44,12 +44,12 @@ export default function WorkspaceSidebar({ar,page,organizationName,navigation,on
  const toggleCollapse=()=>{const next=!collapsed;setCollapsed(next);storageSet('localStorage','ne_sidebar_collapsed',String(next))};
  const visibleGroups=sidebarGroups.filter(group=>group.items.some(item=>labels[item]));
  const compact=collapsed&&!mobile;
- return <aside className={`workspace-sidebar sidebar-organized${compact?' sidebar-collapsed':''}${mobileOpen?' sidebar-mobile-open':''}`}>
-  <a href="/?module=home" className="workspace-brand" title="NetExpert"><b>N</b><span>NetExpert<small>{organizationName}</small></span></a>
-  <nav id="workspace-navigation" aria-label={ar?'التنقل':'Workspace navigation'}>
+ return <aside className={`workspace-sidebar sidebar-organized${compact?' sidebar-collapsed':''}`}>
+  <a href="/?module=home" className="workspace-brand" title="Net Expert"><b>NE</b><span>Net Expert<small>{organizationName}</small></span></a>
+  <nav aria-label={ar?'التنقل':'Workspace navigation'}>
    {labels.home&&<button type="button" className={`sidebar-home${page==='home'?' active':''}`} aria-current={page==='home'?'page':undefined} title={ar?'الصفحة الرئيسية':'Home'} onClick={()=>onNavigate('home')}><NavIcon name="home"/><span className="sidebar-text">{labels.home}</span></button>}
    {visibleGroups.map(group=>{const active=group.key===activeGroup,expanded=open[group.key]||active,children=group.items.filter(item=>labels[item]);return <div className={`sidebar-group${active?' has-active':''}`} key={group.key}>
-    <button type="button" className="sidebar-group-toggle" aria-expanded={expanded} aria-controls={`sidebar-group-${group.key}`} title={ar?group.ar:group.en} onClick={()=>{if(compact){setCollapsed(false);storageSet('localStorage','ne_sidebar_collapsed','false')}setOpen(current=>({...current,[group.key]:active?true:!current[group.key]}))}}><NavIcon name={group.icon}/><span className="sidebar-text">{ar?group.ar:group.en}</span><svg className="sidebar-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button type="button" className="sidebar-group-toggle" aria-expanded={expanded} aria-controls={`sidebar-group-${group.key}`} title={ar?group.ar:group.en} onClick={()=>{if(compact){setCollapsed(false);storageSet('localStorage','ne_sidebar_collapsed','false')}setOpen(current=>({...current,[group.key]:active?true:!current[group.key]}))}}><NavIcon name={group.icon}/><span className="sidebar-text">{ar?group.ar:group.en}</span><span className="sidebar-chevron" aria-hidden="true">⌄</span></button>
     <div id={`sidebar-group-${group.key}`} className={`sidebar-children${expanded?' is-open':''}`} aria-hidden={compact||!expanded}><div className="sidebar-children-inner">{children.map(item=><button type="button" key={item} tabIndex={compact||!expanded?-1:0} aria-current={page===item?'page':undefined} className={`sidebar-child${page===item?' active':''}`} onClick={()=>onNavigate(item)}><NavIcon name={item}/><span>{labels[item]}</span></button>)}</div></div>
    </div>})}
   </nav>

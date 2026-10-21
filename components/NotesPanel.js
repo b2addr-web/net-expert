@@ -1,193 +1,36 @@
-import {useCallback,useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {NavIcon} from './WorkspaceSidebar';
+import {allowedFileTypes,canEditKnowledge,deleteKnowledgeItem,downloadKnowledgeFile,fileSize,knowledgeSchemaReady,knowledgeTime,knowledgeType,listKnowledge,uploadKnowledgeFile,validateKnowledgeFile} from '../lib/knowledge';
 
-const fields='id,organization_id,created_by,title,body,file_path,file_name,file_size,shared_with_team,created_at,updated_at';
-const allowedTypes=['application/pdf','image/png','image/jpeg','image/webp','text/plain','text/csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/msword','application/vnd.ms-excel'];
-const maxFileSize=10485760;
-const dateText=(date,ar)=>date?new Intl.DateTimeFormat(ar?'ar-SA-u-ca-gregory':'en-GB',{timeZone:'Asia/Riyadh',dateStyle:'medium',timeStyle:'short'}).format(new Date(date)):'—';
-const sizeText=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.ceil(n/1024))+' KB';
-const extOf=name=>(name||'').split('.').pop().toLowerCase();
-const fileKind=name=>['jpg','jpeg','png','webp'].includes(extOf(name))?'images':['xls','xlsx','csv'].includes(extOf(name))?'sheets':['pdf','doc','docx','txt'].includes(extOf(name))?'documents':'other';
-const fileBadge=name=>({pdf:'PDF',doc:'W',docx:'W',xls:'X',xlsx:'X',csv:'CSV',jpg:'IMG',jpeg:'IMG',png:'IMG',webp:'IMG',txt:'TXT'}[extOf(name)]||'FILE');
-const language={
- ar:{notes:'الملاحظات',files:'الملفات',notesDesc:'توثيق الملاحظات والمعلومات المهمة للفريق',filesDesc:'إدارة الملفات والمستندات ومشاركتها مع الفريق',newNote:'ملاحظة جديدة',newFile:'رفع ملف',newFolder:'مجلد جديد',searchNotes:'ابحث في الملاحظات...',searchFiles:'ابحث في الملفات...',all:'الكل',mine:'خاص بي',team:'مشاركة مع الفريق',title:'العنوان',body:'محتوى الملاحظة',excerpt:'المحتوى المختصر',author:'الكاتب',created:'تاريخ الإنشاء',updated:'آخر تعديل',sharing:'المشاركة',actions:'الإجراءات',save:'حفظ',cancel:'إلغاء',delete:'حذف',edit:'تعديل',download:'تنزيل',open:'فتح',preview:'معاينة',private:'خاص بي',shared:'مشاركة مع الفريق',privateHint:'تظهر لك فقط',sharedHint:'تظهر لأعضاء الفريق المصرح لهم',allFiles:'كل الملفات',folders:'المجلدات',folder:'المجلد',folderName:'اسم المجلد',noFolder:'بدون مجلد',chooseFile:'اختر ملفًا أو اسحبه إلى هنا',fileHint:'PDF، صور، Word، Excel، نصوص — حتى 10 ميجابايت',kind:'نوع الملف',sort:'الترتيب',newest:'الأحدث أولًا',oldest:'الأقدم أولًا',grid:'بطاقات',list:'قائمة',fileSize:'الحجم',move:'نقل إلى مجلد',loading:'جارٍ التحميل...',emptyNotes:'لا توجد ملاحظات تطابق البحث',emptyFiles:'لا توجد ملفات تطابق البحث',noteSaved:'تم حفظ الملاحظة',fileSaved:'تم رفع الملف',folderSaved:'تم حفظ المجلد',deleted:'تم الحذف',confirm:'هل تريد حذف هذا العنصر نهائيًا؟',confirmFolder:'حذف المجلد؟ ستبقى ملفاته محفوظة ضمن كل الملفات.',invalidFile:'ملف غير مدعوم أو حجمه أكبر من 10 ميجابايت.',needFile:'اختر ملفًا للرفع',needBody:'اكتب محتوى الملاحظة',editFolder:'تعديل المجلد',folderUnavailable:'إدارة المجلدات تحتاج تطبيق ترحيل قاعدة البيانات المعتمد. الملفات الحالية محفوظة ومتاحة.',noData:'لا توجد بيانات حاليًا',timestamp:'يظهر الوقت تلقائيًا بتوقيت السعودية، ويُسجل تاريخ الإنشاء عند الحفظ',authorAuto:'من حساب المستخدم الحالي',legacyAttachment:'الملف المرفق',noteDetails:'تفاصيل الملاحظة',fileDetails:'تفاصيل الملف',uploading:'جارٍ الحفظ...',privateFile:'ملف خاص',owned:'أنت',unknown:'عضو بالفريق'},
- en:{notes:'Notes',files:'Files',notesDesc:'Capture notes and knowledge for your authorized team',filesDesc:'Organize documents and share them securely',newNote:'New note',newFile:'Upload file',newFolder:'New folder',searchNotes:'Search notes...',searchFiles:'Search files...',all:'All',mine:'Private',team:'Shared with team',title:'Title',body:'Note content',excerpt:'Preview',author:'Author',created:'Created',updated:'Last edited',sharing:'Sharing',actions:'Actions',save:'Save',cancel:'Cancel',delete:'Delete',edit:'Edit',download:'Download',open:'Open',preview:'Preview',private:'Private',shared:'Shared with team',privateHint:'Only visible to you',sharedHint:'Visible to authorized teammates',allFiles:'All files',folders:'Folders',folder:'Folder',folderName:'Folder name',noFolder:'Unfiled',chooseFile:'Select or drop a file',fileHint:'PDF, images, Word, Excel, text — up to 10 MB',kind:'File type',sort:'Sort',newest:'Newest first',oldest:'Oldest first',grid:'Grid',list:'List',fileSize:'Size',move:'Move to folder',loading:'Loading...',emptyNotes:'No matching notes',emptyFiles:'No matching files',noteSaved:'Note saved',fileSaved:'File uploaded',folderSaved:'Folder saved',deleted:'Deleted',confirm:'Delete this item permanently?',confirmFolder:'Delete this folder? Its files will stay in All files.',invalidFile:'Unsupported file or over 10 MB.',needFile:'Select a file',needBody:'Write your note',editFolder:'Edit folder',folderUnavailable:'Folder management needs the reviewed database migration. Existing files remain available.',noData:'No data yet',timestamp:'Riyadh time shown automatically; creation time recorded when saved',authorAuto:'Your signed-in account',legacyAttachment:'Attachment',noteDetails:'Note details',fileDetails:'File details',uploading:'Saving...',privateFile:'Private file',owned:'You',unknown:'Team member'}
-};
+const tr=(ar,a,b)=>ar?a:b;
+const errorText=(code,ar)=>({INVALID_FILE_SIZE:tr(ar,'حجم الملف يجب أن يكون بين 1 بايت و10 ميجابايت.','File size must be between 1 byte and 10 MB.'),INVALID_FILE_NAME:tr(ar,'اسم الملف يتجاوز 160 حرفًا.','File name exceeds 160 characters.'),INVALID_FILE_TYPE:tr(ar,'نوع الملف غير مدعوم.','Unsupported file type.'),DELETE_NOT_ALLOWED:tr(ar,'لا تملك صلاحية حذف هذه الملاحظة.','You cannot delete this note.')})[code]||code;
 
-export default function NotesPanel({user,ar,section='notes'}){
- const t=language[ar?'ar':'en'],isFiles=section==='files';
- const canManage=['company_admin','operator','manager'].includes(user.role);
- const [items,setItems]=useState([]),[folderList,setFolderList]=useState([]),[foldersReady,setFoldersReady]=useState(false);
- const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [query,setQuery]=useState(''),[visibility,setVisibility]=useState('all'),[kind,setKind]=useState('all'),[order,setOrder]=useState('new');
- const [folderFilter,setFolderFilter]=useState('all'),[display,setDisplay]=useState('grid');
- const [form,setForm]=useState(null),[selectedFile,setSelectedFile]=useState(null),[folderForm,setFolderForm]=useState(null),[detail,setDetail]=useState(null),[previewUrl,setPreviewUrl]=useState('');
- const [owners,setOwners]=useState({});
- const [nowOnOpen,setNowOnOpen]=useState(null);
- const ownerLabel=item=>item.created_by===user.id?user.name||t.owned:owners[item.created_by]||t.unknown;
- const load=useCallback(async()=>{
-  setLoading(true);
-  try{
-   let ready=true;
-   let response=await supabase.from('knowledge_items').select(fields+',folder_id').eq('organization_id',user.organization_id).order('created_at',{ascending:false}).limit(500);
-   if(response.error&&(response.error.code==='42703'||response.error.code==='PGRST204')){
-    ready=false;
-    response=await supabase.from('knowledge_items').select(fields).eq('organization_id',user.organization_id).order('created_at',{ascending:false}).limit(500);
-   }
-   if(response.error)throw response.error;
-   setItems(response.data||[]);
-   if(ready){
-    const folderResult=await supabase.from('knowledge_folders').select('id,name,created_by,shared_with_team').eq('organization_id',user.organization_id).order('name');
-    if(folderResult.error){ready=false;setFolderList([])}else setFolderList(folderResult.data||[]);
-   }else setFolderList([]);
-   setFoldersReady(ready);
-   setError('');
-   const ids=[...new Set((response.data||[]).map(x=>x.created_by).filter(id=>id!==user.id))];
-   if(ids.length){
-    const profiles=await supabase.from('profiles').select('id,full_name').in('id',ids.slice(0,100));
-    if(!profiles.error)setOwners(Object.fromEntries((profiles.data||[]).filter(x=>x.full_name).map(x=>[x.id,x.full_name])));
-   }
-  }catch(e){setError(e.message||String(e))}
-  finally{setLoading(false)}
- },[user.organization_id,user.id]);
- useEffect(()=>{load()},[load]);
- useEffect(()=>{if(!form&&!detail)return;const onKey=e=>{if(e.key==='Escape'&&!busy){setForm(null);setSelectedFile(null);setDetail(null)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[form,detail,busy]);
- useEffect(()=>()=>{if(previewUrl)URL.revokeObjectURL(previewUrl)},[previewUrl]);
- const notes=useMemo(()=>items.filter(x=>!x.file_path||Boolean(x.body&&x.body.trim())),[items]);
- const files=useMemo(()=>items.filter(x=>Boolean(x.file_path)),[items]);
- const visible=useMemo(()=>{
-  const term=query.trim().toLocaleLowerCase();
-  return (isFiles?files:notes).filter(x=>
-   (!term||(x.title+' '+x.body+' '+(x.file_name||'')).toLocaleLowerCase().includes(term))&&
-   (visibility==='all'||(visibility==='mine'?!x.shared_with_team:x.shared_with_team))&&
-   (!isFiles||kind==='all'||fileKind(x.file_name)===kind)&&
-   (!isFiles||folderFilter==='all'||(folderFilter==='unfiled'?!x.folder_id:x.folder_id===folderFilter))
-  ).sort((a,b)=>order==='old'?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at));
- },[isFiles,notes,files,query,visibility,kind,folderFilter,order]);
- const startNote=item=>{setError('');setNotice('');setNowOnOpen(new Date());setSelectedFile(null);setForm(item?{...item}:{title:'',body:'',shared_with_team:false})};
- const startFile=()=>{setError('');setNotice('');setSelectedFile(null);setNowOnOpen(new Date());setForm({title:'',body:'',shared_with_team:false,folder_id:folderFilter!=='all'&&folderFilter!=='unfiled'?folderFilter:null})};
- const validFile=file=>file&&file.size>0&&file.size<=maxFileSize&&allowedTypes.includes(file.type)&&file.name.length<=255;
- const onFile=file=>{if(!file)return;if(!validFile(file)){setError(t.invalidFile);return}setError('');setSelectedFile(file);setForm(x=>({...x,title:x.title||file.name}))};
- const save=async e=>{
-  e.preventDefault();if(busy)return;setError('');setNotice('');
-  if(isFiles&&!selectedFile){setError(t.needFile);return}
-  if(!isFiles&&!form.body.trim()&&!form.file_path){setError(t.needBody);return}
-  if(selectedFile&&!validFile(selectedFile)){setError(t.invalidFile);return}
-  setBusy(true);let uploaded='';
-  try{
-   if(isFiles){
-    const safe=selectedFile.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-100)||'file';
-    uploaded=user.organization_id+'/'+user.id+'/'+crypto.randomUUID()+'/'+safe;
-    const result=await supabase.storage.from('knowledge-files').upload(uploaded,selectedFile,{upsert:false,contentType:selectedFile.type});
-    if(result.error)throw result.error;
-   }
-   const payload={title:form.title.trim(),body:form.body.trim(),shared_with_team:form.shared_with_team,updated_at:new Date().toISOString()};
-   if(form.id){
-    const result=await supabase.from('knowledge_items').update(payload).eq('id',form.id).eq('organization_id',user.organization_id).eq('created_by',user.id).select('id').single();
-    if(result.error)throw result.error;
-   }else{
-    const record={...payload,organization_id:user.organization_id,created_by:user.id,file_path:uploaded||null,file_name:selectedFile?selectedFile.name:null,file_size:selectedFile?selectedFile.size:null};
-    if(isFiles&&foldersReady&&form.folder_id)record.folder_id=form.folder_id;
-    const result=await supabase.from('knowledge_items').insert(record).select('id').single();
-    if(result.error)throw result.error;
-   }
-   setForm(null);setSelectedFile(null);setNotice(isFiles?t.fileSaved:t.noteSaved);await load();
-  }catch(ex){
-   if(uploaded)await supabase.storage.from('knowledge-files').remove([uploaded]);
-   setError(ex.message||String(ex));
-  }finally{setBusy(false)}
+export default function NotesPanel({user,ar}){
+ const [schemaReady,setSchemaReady]=useState(false),mayWrite=canEditKnowledge(user),canWrite=mayWrite&&schemaReady,[items,setItems]=useState([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [query,setQuery]=useState(''),[filter,setFilter]=useState('all'),[sort,setSort]=useState('newest'),[menu,setMenu]=useState(null),[editor,setEditor]=useState(null),[draft,setDraft]=useState(null),[attachment,setAttachment]=useState(null);
+ const load=async()=>{setLoading(true);try{const [rows,ready]=await Promise.all([listKnowledge(user.organization_id),knowledgeSchemaReady()]);setItems(rows);setSchemaReady(ready);setError('')}catch(e){setError(e.message)}finally{setLoading(false)}};
+ useEffect(()=>{load()},[user.organization_id]);
+ const notes=useMemo(()=>items.filter(item=>knowledgeType(item)==='note'&&(!query||`${item.title} ${item.body}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))&&(filter==='all'||(filter==='mine'?item.created_by===user.id:item.shared_with_team))).sort((a,b)=>sort==='title'?a.title.localeCompare(b.title):sort==='oldest'?Date.parse(a.created_at)-Date.parse(b.created_at):sort==='updated'?Date.parse(b.updated_at)-Date.parse(a.updated_at):Date.parse(b.created_at)-Date.parse(a.created_at)),[items,query,filter,sort,user.id]);
+ const open=(item=null,mode='new')=>{setMenu(null);setError('');setAttachment(null);setEditor({mode,item,openedAt:new Date().toISOString()});setDraft(item?{title:item.title,body:item.body,shared_with_team:item.shared_with_team}:{title:'',body:'',shared_with_team:false})};
+ const close=()=>{if(busy)return;const dirty=editor?.mode!=='view'&&draft&&(editor?.item?(draft.title!==editor.item.title||draft.body!==editor.item.body||draft.shared_with_team!==editor.item.shared_with_team):Boolean(draft.title||draft.body||attachment));if(dirty&&!window.confirm(tr(ar,'إغلاق دون حفظ التعديلات؟','Close without saving changes?')))return;setEditor(null);setDraft(null);setAttachment(null)};
+ const save=async event=>{event.preventDefault();if(busy)return;setError('');setNotice('');if(!draft.title.trim()){setError(tr(ar,'عنوان الملاحظة مطلوب.','Note title is required.'));return}if(!draft.body.trim()){setError(tr(ar,'محتوى الملاحظة مطلوب.','Note content is required.'));return}
+  setBusy(true);let path=null;try{
+   if(attachment){validateKnowledgeFile(attachment);path=await uploadKnowledgeFile(user,attachment)}
+   const payload={title:draft.title.trim(),body:draft.body,shared_with_team:draft.shared_with_team};
+   const operation=editor?.item?.id?supabase.from('knowledge_items').update(payload).eq('organization_id',user.organization_id).eq('id',editor.item.id).eq('created_by',user.id):supabase.from('knowledge_items').insert({...payload,item_type:'note',organization_id:user.organization_id,created_by:user.id,file_path:path,file_name:attachment?.name||null,file_size:attachment?.size||null});
+   const {data,error:saveError}=await operation.select().single();if(saveError)throw saveError;
+   setItems(current=>[data,...current.filter(item=>item.id!==data.id)]);setEditor(null);setDraft(null);setAttachment(null);setNotice(tr(ar,'حُفظت الملاحظة.','Note saved.'));
+  }catch(e){if(path)await supabase.storage.from('knowledge-files').remove([path]);setError(errorText(e.message,ar))}finally{setBusy(false)}
  };
- const remove=async item=>{
-  if(!window.confirm(t.confirm))return;
-  setBusy(true);setError('');
-  try{
-   const response=await supabase.from('knowledge_items').delete().eq('id',item.id).eq('organization_id',user.organization_id).eq('created_by',user.id).select('id').single();
-   if(response.error)throw response.error;
-   if(item.file_path){const cleaned=await supabase.storage.from('knowledge-files').remove([item.file_path]);if(cleaned.error)setError(cleaned.error.message)}
-   setDetail(null);setNotice(t.deleted);await load();
-  }catch(e){setError(e.message||String(e))}finally{setBusy(false)}
- };
- const download=async item=>{
-  setError('');
-  try{
-   const result=await supabase.storage.from('knowledge-files').download(item.file_path);
-   if(result.error)throw result.error;
-   const url=URL.createObjectURL(result.data),a=document.createElement('a');
-   a.href=url;a.download=item.file_name||'file';document.body.appendChild(a);a.click();a.remove();
-   window.setTimeout(()=>URL.revokeObjectURL(url),2000);
-  }catch(e){setError(e.message||String(e))}
- };
- const showDetail=async item=>{
-  setDetail(item);setError('');setPreviewUrl('');
-  if(!item.file_path||!(fileKind(item.file_name)==='images'||extOf(item.file_name)==='pdf'))return;
-  const result=await supabase.storage.from('knowledge-files').download(item.file_path);
-  if(result.error){setError(result.error.message);return}
-  setPreviewUrl(URL.createObjectURL(result.data));
- };
- const moveFile=async(item,folderId)=>{
-  setBusy(true);setError('');
-  try{
-   const result=await supabase.from('knowledge_items').update({folder_id:folderId||null,updated_at:new Date().toISOString()}).eq('id',item.id).eq('organization_id',user.organization_id).eq('created_by',user.id);
-   if(result.error)throw result.error;
-   await load();
-  }catch(e){setError(e.message||String(e))}finally{setBusy(false)}
- };
- const saveFolder=async e=>{
-  e.preventDefault();if(!folderForm?.name.trim()||busy)return;
-  setBusy(true);setError('');
-  try{
-   const payload={name:folderForm.name.trim(),shared_with_team:Boolean(folderForm.shared_with_team)};
-   const query=folderForm.id?supabase.from('knowledge_folders').update(payload).eq('id',folderForm.id).eq('created_by',user.id):supabase.from('knowledge_folders').insert({...payload,organization_id:user.organization_id,created_by:user.id});
-   const res=await query;if(res.error)throw res.error;
-   setFolderForm(null);setNotice(t.folderSaved);await load();
-  }catch(e){setError(e.message||String(e))}finally{setBusy(false)}
- };
- const deleteFolder=async folder=>{
-  if(!window.confirm(t.confirmFolder))return;setBusy(true);setError('');
-  try{
-   const result=await supabase.from('knowledge_folders').delete().eq('id',folder.id).eq('organization_id',user.organization_id).eq('created_by',user.id);
-   if(result.error)throw result.error;
-   setFolderFilter('all');setNotice(t.deleted);await load();
-  }catch(e){setError(e.message||String(e))}finally{setBusy(false)}
- };
- const permission=(item)=>canManage&&item.created_by===user.id;
- return <div className="work-page knowledge-panel knowledge-v2" dir={ar?'rtl':'ltr'}>
-  <header className="knowledge-heading">
-   <div><small>{user.organization_name}</small><h1><NavIcon name={isFiles?'files':'notes'}/>{isFiles?t.files:t.notes}</h1><p>{isFiles?t.filesDesc:t.notesDesc}</p></div>
-   {canManage&&<button type="button" className="work-primary knowledge-add" onClick={isFiles?startFile:()=>startNote()}>＋ {isFiles?t.newFile:t.newNote}</button>}
-  </header>
-  {error&&<p className="work-error" role="alert">{error}</p>}
-  {notice&&<p className="knowledge-success" role="status">{notice}</p>}
-  <div className="knowledge-toolbar"><div className="knowledge-search"><span aria-hidden="true">⌕</span><input aria-label={isFiles?t.searchFiles:t.searchNotes} placeholder={isFiles?t.searchFiles:t.searchNotes} value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="knowledge-filter-pills">{[['all',t.all],['mine',t.mine],['team',t.team]].map(([key,label])=><button key={key} type="button" className={visibility===key?'active':''} aria-pressed={visibility===key} onClick={()=>setVisibility(key)}>{label}</button>)}</div><select aria-label={t.sort} value={order} onChange={e=>setOrder(e.target.value)}><option value="new">{t.newest}</option><option value="old">{t.oldest}</option></select></div>
-  {isFiles&&<div className="knowledge-file-filters"><div>{[['all',t.all],['documents',ar?'المستندات':'Documents'],['sheets',ar?'الجداول':'Spreadsheets'],['images',ar?'الصور':'Images']].map(([value,label])=><button type="button" key={value} className={kind===value?'active':''} onClick={()=>setKind(value)}>{label}</button>)}</div><div className="knowledge-view-switch"><button type="button" aria-label={t.grid} className={display==='grid'?'active':''} onClick={()=>setDisplay('grid')}>▦</button><button type="button" aria-label={t.list} className={display==='list'?'active':''} onClick={()=>setDisplay('list')}>☷</button></div></div>}
-  {isFiles?<div className="knowledge-file-layout">
-   <aside className="knowledge-folders"><div className="knowledge-folders-title"><h2>{t.folders}</h2>{canManage&&foldersReady&&<button type="button" title={t.newFolder} onClick={()=>setFolderForm({name:'',shared_with_team:false})}>＋</button>}</div>
-    <button type="button" className={folderFilter==='all'?'active':''} onClick={()=>setFolderFilter('all')}><span>▣ {t.allFiles}</span><b>{files.length}</b></button>
-    <button type="button" className={folderFilter==='unfiled'?'active':''} onClick={()=>setFolderFilter('unfiled')}><span>▤ {t.noFolder}</span><b>{files.filter(x=>!x.folder_id).length}</b></button>
-    {folderList.map(folder=><div key={folder.id} className="knowledge-folder-row"><button type="button" className={folderFilter===folder.id?'active':''} onClick={()=>setFolderFilter(folder.id)}><span>▱ {folder.name}</span><b>{files.filter(x=>x.folder_id===folder.id).length}</b></button>{permission({created_by:folder.created_by})&&<div className="knowledge-folder-actions"><button type="button" title={t.editFolder} onClick={()=>setFolderForm({...folder})}>✎</button><button type="button" title={t.delete} onClick={()=>deleteFolder(folder)}>×</button></div>}</div>)}
-    {!foldersReady&&<p className="knowledge-hint">{t.folderUnavailable}</p>}
-   </aside>
-   <section className="knowledge-file-content" aria-label={t.files}>
-    {loading?<p className="knowledge-empty">{t.loading}</p>:!visible.length?<p className="knowledge-empty">{t.emptyFiles}</p>:<div className={'knowledge-file-grid '+(display==='list'?'is-list':'')}>
-    {visible.map(item=><article className="knowledge-file-card" key={item.id}>
-      <div className="knowledge-card-top"><span className={'knowledge-format '+fileKind(item.file_name)}>{fileBadge(item.file_name)}</span><span className="knowledge-card-actions"><button type="button" title={t.preview} onClick={()=>showDetail(item)}>⋯</button></span></div>
-      <button type="button" className="knowledge-card-title" title={item.file_name} onClick={()=>showDetail(item)}>{item.file_name}</button>
-      <div className="knowledge-card-meta"><span>{sizeText(item.file_size||0)}</span><span>{dateText(item.created_at,ar)}</span><span>{ownerLabel(item)}</span></div>
-      <div className="knowledge-card-footer"><span className={'knowledge-status '+(item.shared_with_team?'team':'private')}>{item.shared_with_team?t.team:t.private}</span><button type="button" onClick={()=>download(item)} title={t.download}>↓</button></div>
-      {foldersReady&&permission(item)&&<label className="knowledge-move">{t.move}<select value={item.folder_id||''} onChange={e=>moveFile(item,e.target.value)} disabled={busy}><option value="">{t.noFolder}</option>{folderList.filter(folder=>folder.created_by===user.id).map(folder=><option value={folder.id} key={folder.id}>{folder.name}</option>)}</select></label>}
-    </article>)}
-    </div>}
-   </section>
-  </div>:<section className="knowledge-notes-table"><div className="knowledge-table-scroll"><table><thead><tr><th>{t.title}</th><th>{t.excerpt}</th><th>{t.author}</th><th>{t.updated}</th><th>{t.sharing}</th><th>{t.actions}</th></tr></thead><tbody>{loading?<tr><td colSpan={6} className="knowledge-empty">{t.loading}</td></tr>:visible.length===0?<tr><td colSpan={6} className="knowledge-empty">{t.emptyNotes}</td></tr>:visible.map(item=><tr key={item.id}><td><button type="button" className="knowledge-note-link" onClick={()=>showDetail(item)}><span className="knowledge-note-symbol">▤</span>{item.title}</button></td><td className="knowledge-preview-cell">{item.body||'—'}</td><td>{ownerLabel(item)}</td><td>{dateText(item.updated_at||item.created_at,ar)}</td><td><span className={'knowledge-status '+(item.shared_with_team?'team':'private')}>{item.shared_with_team?t.team:t.private}</span></td><td><div className="knowledge-row-actions"><button type="button" onClick={()=>showDetail(item)} title={t.open}>⋯</button>{permission(item)&&<button type="button" title={t.edit} onClick={()=>startNote(item)}>✎</button>}</div></td></tr>)}</tbody></table></div></section>}
-  {form&&<div className="work-overlay knowledge-overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy){setForm(null);setSelectedFile(null)}}}><form className="knowledge-editor" role="dialog" aria-modal="true" aria-label={isFiles?t.newFile:t.newNote} onSubmit={save}><header><div><small>{isFiles?t.files:t.notes}</small><h2>{form.id?t.edit:isFiles?t.newFile:t.newNote}</h2></div><button type="button" aria-label={t.cancel} disabled={busy} onClick={()=>{setForm(null);setSelectedFile(null)}}>×</button></header><div className="knowledge-editor-body">
-   <div className="knowledge-editor-info"><span>▦ {dateText(form.created_at||nowOnOpen,ar)}</span><span>◉ {form.id?ownerLabel(form):user.name||t.authorAuto}</span><small>{t.timestamp}</small></div>
-   <label>{t.title}<input autoFocus required maxLength={160} value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder={t.title}/></label>
-   {!isFiles&&<label>{t.body}<textarea rows={10} maxLength={10000} value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder={t.body}/><small className="knowledge-character-count">{form.body.length} / 10000</small></label>}
-   {isFiles&&<><div className="knowledge-dropzone" onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onFile(e.dataTransfer.files?.[0])}}><div className="knowledge-dropicon">⇧</div><p>{selectedFile?.name||t.chooseFile}</p><small>{selectedFile?sizeText(selectedFile.size):t.fileHint}</small><input type="file" accept={allowedTypes.join(',')} aria-label={t.newFile} onChange={e=>onFile(e.target.files?.[0])}/></div>{foldersReady&&<label>{t.folder}<select value={form.folder_id||''} onChange={e=>setForm({...form,folder_id:e.target.value||null})}><option value="">{t.noFolder}</option>{folderList.filter(x=>x.created_by===user.id).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>}</>}
-   <fieldset className="knowledge-share-options"><legend>{t.sharing}</legend><label className={!form.shared_with_team?'selected':''}><input type="radio" checked={!form.shared_with_team} onChange={()=>setForm({...form,shared_with_team:false})}/><span>▣ <strong>{t.private}</strong><small>{t.privateHint}</small></span></label><label className={form.shared_with_team?'selected':''}><input type="radio" checked={form.shared_with_team} onChange={()=>setForm({...form,shared_with_team:true})}/><span>♧ <strong>{t.shared}</strong><small>{t.sharedHint}</small></span></label></fieldset>
-  </div><footer><button type="button" disabled={busy} onClick={()=>{setForm(null);setSelectedFile(null)}}>{t.cancel}</button><button type="submit" className="work-primary" disabled={busy}>{busy?t.uploading:t.save}</button></footer></form></div>}
-  {folderForm&&<div className="work-overlay knowledge-overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setFolderForm(null)}}><form role="dialog" aria-modal="true" aria-label={t.newFolder} className="knowledge-folder-form" onSubmit={saveFolder}><header><h2>{folderForm.id?t.editFolder:t.newFolder}</h2><button type="button" onClick={()=>setFolderForm(null)}>×</button></header><label>{t.folderName}<input autoFocus required maxLength={90} value={folderForm.name} onChange={e=>setFolderForm({...folderForm,name:e.target.value})}/></label><label className="knowledge-folder-share"><input type="checkbox" checked={folderForm.shared_with_team} onChange={e=>setFolderForm({...folderForm,shared_with_team:e.target.checked})}/>{t.shared}</label><footer><button type="button" onClick={()=>setFolderForm(null)}>{t.cancel}</button><button className="work-primary" disabled={busy}>{t.save}</button></footer></form></div>}
-  {detail&&<div className="work-overlay knowledge-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}><section role="dialog" aria-modal="true" aria-label={isFiles?t.fileDetails:t.noteDetails} className="knowledge-detail"><header><div><small>{isFiles?t.fileDetails:t.noteDetails}</small><h2>{detail.title}</h2></div><button type="button" aria-label={t.cancel} onClick={()=>setDetail(null)}>×</button></header><div className="knowledge-detail-body"><div className="knowledge-detail-meta"><span>{t.author}: {ownerLabel(detail)}</span><span>{t.created}: {dateText(detail.created_at,ar)}</span><span>{t.updated}: {dateText(detail.updated_at,ar)}</span><span className={'knowledge-status '+(detail.shared_with_team?'team':'private')}>{detail.shared_with_team?t.team:t.private}</span></div>{detail.body&&<p className="knowledge-detail-text">{detail.body}</p>}{detail.file_path&&<><div className="knowledge-detail-file"><span className={'knowledge-format '+fileKind(detail.file_name)}>{fileBadge(detail.file_name)}</span><strong>{detail.file_name}</strong><span>{sizeText(detail.file_size||0)}</span><button type="button" onClick={()=>download(detail)}>{t.download} ↓</button></div>{previewUrl&&fileKind(detail.file_name)==='images'&&<img className="knowledge-image-preview" src={previewUrl} alt={detail.file_name}/>}{previewUrl&&extOf(detail.file_name)==='pdf'&&<iframe className="knowledge-pdf-preview" src={previewUrl} title={detail.file_name}/>}</>}</div><footer>{permission(detail)&&<><button type="button" onClick={()=>remove(detail)} disabled={busy}>{t.delete}</button><button type="button" onClick={()=>{setDetail(null);startNote(detail)}} disabled={busy}>{t.edit}</button></>}<button type="button" className="work-primary" onClick={()=>setDetail(null)}>{t.cancel}</button></footer></section></div>}
+ const remove=async item=>{if(!window.confirm(tr(ar,'حذف هذه الملاحظة نهائيًا؟','Permanently delete this note?')))return;setBusy(true);setError('');try{const blobRemoved=await deleteKnowledgeItem(item,user);setItems(current=>current.filter(row=>row.id!==item.id));setEditor(null);setNotice(blobRemoved?tr(ar,'حُذفت الملاحظة.','Note deleted.'):tr(ar,'حُذفت الملاحظة؛ تعذر تنظيف المرفق من التخزين.','Note deleted; attachment cleanup failed.'))}catch(e){setError(errorText(e.message,ar))}finally{setBusy(false)}};
+ const author=item=>item.author_name||((item.created_by===user.id&&user.name)||'—');
+ return <div className="work-page knowledge-page notes-page" dir={ar?'rtl':'ltr'}>
+  <header className="knowledge-page-heading"><div><small>{user.organization_name}</small><h1>{tr(ar,'الملاحظات','Notes')}</h1><p>{tr(ar,'توثيق الملاحظات والمعلومات المهمة للفريق','Document important notes and information for the team')}</p></div>{mayWrite&&<button className="work-primary" disabled={!canWrite} onClick={()=>open()}>+ {tr(ar,'ملاحظة جديدة','New note')}</button>}</header>
+  {!loading&&!schemaReady&&<p className="knowledge-pending" role="status">{tr(ar,'الصفحة متاحة للمعاينة. سيُفعّل إنشاء الملاحظات وتعديلها بعد اعتماد ترحيل قاعدة البيانات.','This page is available for preview. Creating and editing notes will be enabled after the database migration is approved.')}</p>}{error&&<p className="work-error" role="alert">{error}</p>}{notice&&<p className="knowledge-success" role="status">{notice}</p>}
+  <section className="knowledge-surface"><div className="knowledge-toolbar"><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder={tr(ar,'ابحث في العنوان أو المحتوى','Search title or content')} aria-label={tr(ar,'بحث الملاحظات','Search notes')}/><div className="knowledge-filter-pills">{[['all','الكل','All'],['mine','خاص بي','Mine'],['team','مشاركة مع الفريق','Shared with team']].map(([value,arabic,english])=><button type="button" className={filter===value?'active':''} key={value} onClick={()=>setFilter(value)}>{tr(ar,arabic,english)}</button>)}</div><select value={sort} onChange={e=>setSort(e.target.value)} aria-label={tr(ar,'ترتيب الملاحظات','Sort notes')}><option value="newest">{tr(ar,'الأحدث أولًا','Newest first')}</option><option value="updated">{tr(ar,'آخر تعديل','Recently updated')}</option><option value="oldest">{tr(ar,'الأقدم أولًا','Oldest first')}</option><option value="title">{tr(ar,'العنوان','Title')}</option></select></div>
+   {loading?<p className="knowledge-empty" role="status">{tr(ar,'جارٍ تحميل الملاحظات…','Loading notes…')}</p>:notes.length?<div className="knowledge-table-wrap"><table className="knowledge-table"><thead><tr><th>{tr(ar,'عنوان الملاحظة','Title')}</th><th>{tr(ar,'معاينة المحتوى','Preview')}</th><th>{tr(ar,'الكاتب','Author')}</th><th>{tr(ar,'تاريخ الإنشاء','Created')}</th><th>{tr(ar,'آخر تعديل','Updated')}</th><th>{tr(ar,'المشاركة','Sharing')}</th><th>{tr(ar,'الإجراءات','Actions')}</th></tr></thead><tbody>{notes.map(item=><tr key={item.id}><td><button className="knowledge-title-link" onClick={()=>open(item,'view')}><NavIcon name="notes"/>{item.title}</button>{item.file_path&&<small>{tr(ar,'يحتوي مرفقًا','Attachment')}</small>}</td><td className="knowledge-preview-cell">{item.body||'—'}</td><td>{author(item)}</td><td>{knowledgeTime(item.created_at,ar)}</td><td>{knowledgeTime(item.updated_at,ar)}</td><td><span className={`knowledge-share-badge ${item.shared_with_team?'team':'private'}`}>{item.shared_with_team?tr(ar,'مع الفريق','Team'):tr(ar,'خاص بي','Private')}</span></td><td><div className="knowledge-menu-wrap"><button type="button" className="knowledge-icon-button" aria-label={tr(ar,'إجراءات الملاحظة','Note actions')} aria-expanded={menu===item.id} onClick={()=>setMenu(menu===item.id?null:item.id)}>⋮</button>{menu===item.id&&<div className="knowledge-action-menu"><button onClick={()=>open(item,'view')}>{tr(ar,'فتح','Open')}</button>{canWrite&&item.created_by===user.id&&<><button onClick={()=>open(item,'edit')}>{tr(ar,'تعديل','Edit')}</button><button className="danger" onClick={()=>{setMenu(null);remove(item)}}>{tr(ar,'حذف','Delete')}</button></>}</div>}</div></td></tr>)}</tbody></table></div>:<p className="knowledge-empty">{tr(ar,'لا توجد ملاحظات مطابقة.','No matching notes.')}</p>}
+  </section>
+  {editor&&<div className="knowledge-drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><aside className="knowledge-drawer" role="dialog" aria-modal="true" aria-label={editor.mode==='new'?tr(ar,'ملاحظة جديدة','New note'):editor.item?.title}><header><div className="knowledge-drawer-title"><span><NavIcon name="notes"/></span><div><h2>{editor.mode==='new'?tr(ar,'ملاحظة جديدة','New note'):editor.mode==='edit'?tr(ar,'تعديل الملاحظة','Edit note'):editor.item.title}</h2><p>{tr(ar,'توثيق ملاحظة جديدة في النظام','Document a note in the system')}</p></div></div><button type="button" className="knowledge-close" onClick={close} aria-label={tr(ar,'إغلاق','Close')}>×</button></header><div className="knowledge-drawer-body"><div className="knowledge-meta"><div><small>{tr(ar,'التاريخ والوقت','Date and time')}</small><strong>{knowledgeTime(editor.item?.created_at||editor.openedAt,ar)}</strong></div><div><small>{tr(ar,'الكاتب','Author')}</small><strong>{editor.item?author(editor.item):user.name||'—'}</strong></div>{editor.item&&<div><small>{tr(ar,'آخر تعديل','Last updated')}</small><strong>{knowledgeTime(editor.item.updated_at,ar)}</strong></div>}</div>{editor.mode==='view'?<><h3>{editor.item.title}</h3><p className="knowledge-note-body">{editor.item.body||'—'}</p>{editor.item.file_path&&<button className="knowledge-attachment" onClick={()=>downloadKnowledgeFile(editor.item).catch(e=>setError(e.message))}>{editor.item.file_name} · {fileSize(editor.item.file_size)} ↓</button>}<span className={`knowledge-share-badge ${editor.item.shared_with_team?'team':'private'}`}>{editor.item.shared_with_team?tr(ar,'مشاركة مع الفريق','Shared with team'):tr(ar,'خاص بي','Private')}</span></>:<form id="knowledge-note-form" onSubmit={save}><label>{tr(ar,'عنوان الملاحظة','Note title')}<input autoFocus required maxLength={160} value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label><label>{tr(ar,'محتوى الملاحظة','Note content')}<textarea rows={12} maxLength={10000} value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/><small>{draft.body.length.toLocaleString(ar?'ar-SA':'en-US')} / 10,000</small></label>{editor.mode==='new'&&<label>{tr(ar,'مرفق (اختياري)','Attachment (optional)')}<input type="file" accept={allowedFileTypes.join(',')} onChange={e=>setAttachment(e.target.files?.[0]||null)}/></label>}{editor.item?.file_path&&<p className="knowledge-attachment">{editor.item.file_name} · {fileSize(editor.item.file_size)}</p>}<fieldset className="knowledge-share-options"><legend>{tr(ar,'المشاركة','Sharing')}</legend><label className={!draft.shared_with_team?'selected':''}><input type="radio" checked={!draft.shared_with_team} onChange={()=>setDraft({...draft,shared_with_team:false})}/><span><strong>{tr(ar,'خاص بي','Private')}</strong><small>{tr(ar,'تظهر لك فقط','Only you can see this note')}</small></span></label><label className={draft.shared_with_team?'selected':''}><input type="radio" checked={draft.shared_with_team} onChange={()=>setDraft({...draft,shared_with_team:true})}/><span><strong>{tr(ar,'مشاركة مع الفريق','Share with team')}</strong><small>{tr(ar,'للأعضاء المصرح لهم في شركتك','For authorized members of your company')}</small></span></label></fieldset></form>}</div><footer>{editor.mode==='view'?<>{canWrite&&editor.item.created_by===user.id&&<button className="work-primary" onClick={()=>open(editor.item,'edit')}>{tr(ar,'تعديل','Edit')}</button>}<button onClick={close}>{tr(ar,'إغلاق','Close')}</button></>:<><button type="button" onClick={close}>{tr(ar,'إلغاء','Cancel')}</button><button className="work-primary" type="submit" form="knowledge-note-form" disabled={busy}>{busy?tr(ar,'جارٍ الحفظ…','Saving…'):tr(ar,'حفظ الملاحظة','Save note')}</button></>}</footer></aside></div>}
  </div>;
 }
