@@ -4,6 +4,7 @@ import {supabase} from '../lib/supabase';
 import {listRecords} from '../lib/workspace';
 import {remainingDays} from '../lib/platform-client';
 import {NavIcon} from './WorkspaceSidebar';
+import {getHomeRequest,homeCacheKey,readHomeCache,writeHomeCache} from '../lib/home-cache';
 const HomeBarChart=dynamic(()=>import('./HomeSummaryCharts').then(module=>module.HomeBarChart),{ssr:false});
 const HomeReportDonut=dynamic(()=>import('./HomeSummaryCharts').then(module=>module.HomeReportDonut),{ssr:false});
 
@@ -28,9 +29,10 @@ async function loadTable(key,org){
  if(error)throw error;
  return data||[];
 }
-async function loadHome(keys,org,onSource){
+async function loadHome(keys,org,cacheKey,onSource){
  await Promise.all(keys.map(async key=>{
-  try{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);onSource(key,{rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length})}
+  const requestKey=`${cacheKey}:${key}`;
+  try{const value=await getHomeRequest(requestKey,async()=>{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);return {rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length}});writeHomeCache(requestKey,value);onSource(key,value)}
   catch{onSource(key,{rows:null,count:null})}
  }));
 }
@@ -68,8 +70,9 @@ function attentionItems(data,ar){
 export default function HomePanel({user,ar,navigation,onNavigate}){
  const labels=Object.fromEntries(navigation.map(([key,en,arabic])=>[key,ar?arabic:en]));
  const keys=sources.filter(key=>labels[key]);const signature=keys.join(',');
+ const cacheKey=homeCacheKey({userId:user.id,organizationId:user.organization_id,permissions:user.permissions});
  const [data,setData]=useState({});
- useEffect(()=>{let alive=true;setData({});loadHome(keys,user.organization_id,(key,value)=>{if(alive)setData(previous=>({...previous,[key]:value}))});return()=>{alive=false}},[user.organization_id,signature]);
+ useEffect(()=>{let alive=true;const cached=Object.fromEntries(keys.map(key=>[key,readHomeCache(`${cacheKey}:${key}`)]).filter(([,value])=>value));setData(cached);loadHome(keys,user.organization_id,cacheKey,(key,value)=>{if(alive)setData(previous=>({...previous,[key]:value}))});return()=>{alive=false}},[user.id,user.organization_id,signature,cacheKey]);
  const departments=useMemo(()=>grouped(data.assets?.rows,'department',ar),[data.assets,ar]);
  const devices=useMemo(()=>grouped(data.assets?.rows,'hardware',ar),[data.assets,ar]);
  const reports=useMemo(()=>grouped(data.report?.rows,'status',ar),[data.report,ar]);
@@ -80,7 +83,7 @@ export default function HomePanel({user,ar,navigation,onNavigate}){
  return <div className="work-page home-panel enterprise-home" dir={ar?'rtl':'ltr'}>
   <div className="enterprise-home-heading"><div><small>{user.organization_name}</small><h1>{label(ar,'الصفحة الرئيسية','Home')}</h1></div><time>{new Intl.DateTimeFormat(ar?'ar-SA-u-ca-gregory':'en-GB',{timeZone:'Asia/Riyadh',dateStyle:'full'}).format(new Date())}</time></div>
   <section className="enterprise-home-banner"><div><small>{label(ar,'NetExpert | مساحة العمل','NetExpert | Workspace')}</small><h2>{label(ar,'مرحبًا بك في مساحة عملك','Welcome to your workspace')}</h2><p>{label(ar,'منصة متكاملة لإدارة تقنية المعلومات، ومتابعة الأجهزة والشرائح والبلاغات والطلبات من مكان واحد.','An integrated platform for IT management, tracking devices, SIM cards, reports, and requests in one place.')}</p></div></section>
-  <section className="enterprise-home-metrics" aria-label={label(ar,'مؤشرات الأقسام','Section totals')}>{featured.filter(key=>labels[key]).map(key=><button type="button" key={key} className="enterprise-home-metric" onClick={()=>onNavigate(key)}><span className="enterprise-home-metric-top"><span>{labels[key]}</span><i><NavIcon name={key}/></i></span><strong>{count(key)}</strong><small>{!data[key]?label(ar,'جارٍ تحميل البيانات','Loading data'):data[key].count===null?label(ar,'البيانات غير متاحة الآن','Data unavailable'):label(ar,'من سجلات القسم الحالية','From current section records')}</small></button>)}</section>
+  <section className="enterprise-home-metrics" aria-label={label(ar,'مؤشرات الأقسام','Section totals')}>{featured.filter(key=>labels[key]).map(key=><button type="button" key={key} className="enterprise-home-metric" onClick={()=>onNavigate(key)}><span className="enterprise-home-metric-top"><span>{labels[key]}</span><i><NavIcon name={key}/></i></span>{!data[key]?<span className="enterprise-home-skeleton-value" aria-label={label(ar,'جارٍ تحميل البيانات','Loading data')}/>:<strong>{count(key)}</strong>}<small>{!data[key]?label(ar,'جارٍ تحميل البيانات','Loading data'):data[key].count===null?label(ar,'البيانات غير متاحة الآن','Data unavailable'):label(ar,'من سجلات القسم الحالية','From current section records')}</small></button>)}</section>
   <section className="enterprise-home-summary" aria-label={label(ar,'ملخص البيانات','Data summary')}><div className="enterprise-home-section-heading"><h2>{label(ar,'ملخص البيانات','Data summary')}</h2><p>{label(ar,'مؤشرات من السجلات المصرّح لك بها','Insights from sections you can access')}</p></div><div className={`enterprise-home-chart-grid${labels.assets&&labels.report&&!reports.length?' has-empty-report':''}`}>{labels.assets&&<HomeBarChart title={label(ar,'الأجهزة التقنية حسب القسم','Devices by department')} values={departments} ar={ar} source={data.assets?.rows}/>} {labels.report&&<HomeReportDonut values={reports} ar={ar} source={data.report?.rows}/>} {labels.assets&&<HomeBarChart title={label(ar,'الأجهزة التقنية حسب النوع','Devices by type')} values={devices} ar={ar} source={data.assets?.rows}/>}</div>{!labels.assets&&!labels.report&&<p className="enterprise-home-empty">{label(ar,'لا تتوفر بيانات رسوم من الأقسام المصرّح لك بها.','No chart data is available from your permitted sections.')}</p>}</section>
   <div className="enterprise-home-feed"><section className="enterprise-home-panel"><header><h2>{label(ar,'النشاط الأخير','Recent activity')}</h2><p>{label(ar,'آخر السجلات والعمليات المتاحة','Latest available records and updates')}</p></header>{activity.length?<ol className="enterprise-home-list">{activity.map(item=><li key={item.id}><span className="enterprise-home-list-icon"><NavIcon name={item.key}/></span><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.actor&&<>{item.actor} · </>}{time(item.when,ar)}</small></div></li>)}</ol>:<p className="enterprise-home-empty">{loading?label(ar,'جارٍ تحميل النشاط…','Loading activity…'):unavailable?label(ar,'تعذر تحميل بعض مصادر النشاط.','Some activity sources are unavailable.'):label(ar,'لا يوجد نشاط مسجل بعد.','No activity recorded yet.')}</p>}</section><section className="enterprise-home-panel"><header><h2>{label(ar,'يتطلب الانتباه','Needs attention')}</h2><p>{label(ar,'حالات وتنبيهات من بياناتك الحالية','Items from your current data')}</p></header>{alerts.length?<ul className="enterprise-home-list enterprise-home-alerts">{alerts.map(item=><li key={`${item.key}-${item.id}`}><span className={`enterprise-home-priority ${item.priority}`}>{label(ar,item.priority==='high'?'عاجل':'متابعة',item.priority==='high'?'High':'Review')}</span><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.when?time(item.when,ar):''}</small></div></li>)}</ul>:<p className="enterprise-home-empty">{loading?label(ar,'جارٍ فحص التنبيهات…','Loading alerts…'):unavailable?label(ar,'لا تظهر تنبيهات حاليًا؛ بعض المصادر غير متاحة.','No alerts shown; some sources are unavailable.'):label(ar,'لا توجد عناصر تتطلب الانتباه حاليًا.','Nothing needs attention right now.')}</p>}</section></div>
  </div>;
