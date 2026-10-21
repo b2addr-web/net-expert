@@ -16,3 +16,9 @@ test('legacy note attachment remains classified as a note',()=>{
  assert.equal(knowledgeType({item_type:'note',file_path:'org/user/file',body:'Content'}),'note');
  assert.equal(fileKind('photo.webp'),'image');
 });
+test('attachment availability checks the table even when no notes exist',async()=>{
+ const mock=`let calls=0;const supabase={from(name){calls++;if(name!=='knowledge_attachments')throw Error('wrong table');return {select(){return {limit(){return Promise.resolve({error:new Error('missing table')})}}}}}};`;
+ const module=await import('data:text/javascript;base64,'+Buffer.from(`${mock}\n${source}\nexport const callsMade=()=>calls;`).toString('base64'));
+ await assert.rejects(module.listNoteAttachments([]),/missing table/);
+ assert.equal(module.callsMade(),1);
+});
