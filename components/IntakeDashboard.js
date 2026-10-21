@@ -35,7 +35,7 @@ export default function IntakeDashboard({kind,user,ar}){
  const tr=value=>ar?value:english[value]||value;
  const locale=ar?'ar-SA':'en-US';
  const formatDate=value=>new Date(value).toLocaleDateString(locale);
- const displayError=value=>value==='ADMIN_REQUIRED'?(ar?'هذا الحساب غير مخوّل بإدارة البلاغات أو الطلبات.':'This account cannot manage reports or device requests.'):!ar&&/[\u0600-\u06ff]/.test(value||'')?tr('تعذر إكمال العملية'):value||tr('تعذر إكمال العملية');
+ const displayError=value=>value==='ADMIN_REQUIRED'?(ar?'تعذر التحقق من جلسة هذه الصفحة. راجع إعدادات الخادم أو سجّل الدخول مجددًا.':'This page could not verify your session. Check server configuration or sign in again.'):!ar&&/[\u0600-\u06ff]/.test(value||'')?tr('تعذر إكمال العملية'):value||tr('تعذر إكمال العملية');
  const canManage=['company_admin','operator','manager'].includes(user.role);
  const [data,setData]=useState({links:[],cases:[]}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[label,setLabel]=useState('');
  const [selected,setSelected]=useState(null),[detail,setDetail]=useState(null),[note,setNote]=useState('');
