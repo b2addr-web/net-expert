@@ -110,7 +110,7 @@ export function AuthProvider({ children }) {
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       if (event === 'PASSWORD_RECOVERY' && session?.user) { saveRecoveryGrant(session.user.id); setRecoveryMode(true); }
-      if (event === 'SIGNED_OUT' || !session?.user) { clearRecoveryGrant(); setRecoveryMode(false); setUser(null); setProfileError(null); }
+      if (event === 'SIGNED_OUT' || !session?.user) { clearHomeCache(); clearRecoveryGrant(); setRecoveryMode(false); setUser(null); setProfileError(null); }
       else {
         setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
         window.setTimeout(() => {

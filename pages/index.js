@@ -20,6 +20,7 @@ import {T} from '../lib/data';
 import {canAccessPage} from '../lib/rbac';
 import {storageGet,storageSet} from '../lib/browserStorage';
 import {supabase} from '../lib/supabase';
+import {clearHomeCache} from '../lib/home-cache';
 const navigation=[['home','Home','الصفحة الرئيسية'],['report','Technical Reports','البلاغات'],['device_request','Device Requests','طلبات الأجهزة'],['purchasing','Purchasing','المشتريات'],['assets','Devices','الأجهزة التقنية'],['sim','SIM Cards','شرائح الاتصال'],['inventory','IT Inventory','المخزون التقني'],['subscriptions','Subscriptions','إدارة الاشتراكات'],['monitoring','Website Monitoring','مراقبة المواقع'],['notes','Notes','الملاحظات'],['files','Files','الملفات'],['reports','Reports','التقارير'],['exports','Export Center','مركز التصدير'],['administration','Administration','الإدارة']];
 export default function NetExpert(){
  const {user,ready,recoveryMode,profileError,retryProfile,logout,logoutAll}=useAuth(),router=useRouter();const [lang,setLang]=useState('en'),[menu,setMenu]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[workspaces,setWorkspaces]=useState([]),[users,setUsers]=useState(false),[searchOpen,setSearchOpen]=useState(false),[error,setError]=useState('');const ar=lang==='ar',t=T[lang],page=typeof router.query.module==='string'?router.query.module:'sim';
@@ -28,7 +29,7 @@ export default function NetExpert(){
  const allowed=user?navigation.filter(([key])=>key==='home'?user.status==='active':canAccessPage(user,key)):[];const accessible=allowed.some(([key])=>key===page);
  const go=key=>{setMobileOpen(false);return router.push({pathname:'/',query:{module:key}},undefined,{shallow:true})};
  const signout=async all=>{setError('');try{await(all?logoutAll():logout())}catch(e){setError(e.message)}};
- const switchWorkspace=async e=>{setError('');const {error}=await supabase.rpc('select_my_workspace',{workspace_id:e.target.value});if(error){setError(error.message);return}window.location.assign('/')};
+ const switchWorkspace=async e=>{setError('');const {error}=await supabase.rpc('select_my_workspace',{workspace_id:e.target.value});if(error){setError(error.message);return}clearHomeCache();window.location.assign('/')};
  if(!ready)return <div className="work-empty" role="status">Loading workspace…</div>;
  if(!user||recoveryMode)return <LoginPage t={t}/>;
  if(user.accountLoading)return <div className="work-empty" dir={ar?'rtl':'ltr'}>{profileError?<><p role="alert">{ar?'تعذر تحميل صلاحيات الحساب. تحقق من الاتصال ثم حاول مجددًا.':'Could not load account permissions. Check your connection and try again.'}</p><button onClick={()=>retryProfile().catch(()=>{})}>{ar?'إعادة المحاولة':'Try again'}</button></>:<p role="status">{ar?'جارٍ تحميل حسابك وصلاحياتك…':'Loading your account and permissions…'}</p>}</div>;

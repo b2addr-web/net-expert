@@ -107,6 +107,7 @@
 .enterprise-home-chart-empty svg{width:18px;height:18px}
 .enterprise-home-chart-empty p{margin:0;font-size:11px;line-height:1.5}
 @keyframes enterprise-skeleton{from{background-position:200% 0}to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.enterprise-home-skeleton-value{animation:none}}
 .enterprise-home-report-layout{display:flex;align-items:center;justify-content:center;gap:11px;min-height:170px}
 .enterprise-home-pie-wrap{position:relative;width:min(47%,166px);height:166px;flex:none}
 .enterprise-home-pie-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}

@@ -4,7 +4,7 @@ import {supabase} from '../lib/supabase';
 import {listRecords} from '../lib/workspace';
 import {remainingDays} from '../lib/platform-client';
 import {NavIcon} from './WorkspaceSidebar';
-import {getHomeRequest,homeCacheKey,readHomeCache,writeHomeCache} from '../lib/home-cache';
+import {getHomeRequest,homeCacheGeneration,homeCacheKey,readHomeCache} from '../lib/home-cache';
 const HomeBarChart=dynamic(()=>import('./HomeSummaryCharts').then(module=>module.HomeBarChart),{ssr:false});
 const HomeReportDonut=dynamic(()=>import('./HomeSummaryCharts').then(module=>module.HomeReportDonut),{ssr:false});
 
@@ -30,10 +30,11 @@ async function loadTable(key,org){
  return data||[];
 }
 async function loadHome(keys,org,cacheKey,onSource){
+ const generation=homeCacheGeneration();
  await Promise.all(keys.map(async key=>{
   const requestKey=`${cacheKey}:${key}`;
-  try{const value=await getHomeRequest(requestKey,async()=>{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);return {rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length}});writeHomeCache(requestKey,value);onSource(key,value)}
-  catch{onSource(key,{rows:null,count:null})}
+  try{const value=await getHomeRequest(requestKey,async()=>{const rows=['assets','sim','purchasing'].includes(key)?await listRecords(key):['report','device_request'].includes(key)?await loadCases(key):await loadTable(key,org);return {rows,count:rows.length>=1000&&['report','device_request','subscriptions','monitoring','inventory'].includes(key)?'≥1000':rows.length}});if(generation===homeCacheGeneration())onSource(key,value)}
+  catch{if(generation===homeCacheGeneration())onSource(key,{rows:null,count:null})}
  }));
 }
 function grouped(rows,field,ar){return Object.entries((rows||[]).reduce((result,row)=>{const value=String(row[field]||'').trim()||label(ar,'غير محدد','Unspecified');result[value]=(result[value]||0)+1;return result},{})).sort((a,b)=>b[1]-a[1])}
@@ -70,9 +71,11 @@ function attentionItems(data,ar){
 export default function HomePanel({user,ar,navigation,onNavigate}){
  const labels=Object.fromEntries(navigation.map(([key,en,arabic])=>[key,ar?arabic:en]));
  const keys=sources.filter(key=>labels[key]);const signature=keys.join(',');
- const cacheKey=homeCacheKey({userId:user.id,organizationId:user.organization_id,permissions:user.permissions});
- const [data,setData]=useState({});
- useEffect(()=>{let alive=true;const cached=Object.fromEntries(keys.map(key=>[key,readHomeCache(`${cacheKey}:${key}`)]).filter(([,value])=>value));setData(cached);loadHome(keys,user.organization_id,cacheKey,(key,value)=>{if(alive)setData(previous=>({...previous,[key]:value}))});return()=>{alive=false}},[user.id,user.organization_id,signature,cacheKey]);
+ const cacheKey=homeCacheKey({userId:user.id,organizationId:user.organization_id,permissions:user.permissions,role:user.role,sections:signature});
+ const cachedData=()=>Object.fromEntries(keys.map(key=>[key,readHomeCache(`${cacheKey}:${key}`)]).filter(([,value])=>value));
+ const [state,setState]=useState(()=>({scope:cacheKey,data:cachedData()}));
+ const data=state.scope===cacheKey?state.data:cachedData();
+ useEffect(()=>{let alive=true;setState({scope:cacheKey,data:cachedData()});loadHome(keys,user.organization_id,cacheKey,(key,value)=>{if(alive)setState(previous=>previous.scope===cacheKey?{scope:cacheKey,data:{...previous.data,[key]:value}}:previous)});return()=>{alive=false}},[user.id,user.organization_id,signature,cacheKey]);
  const departments=useMemo(()=>grouped(data.assets?.rows,'department',ar),[data.assets,ar]);
  const devices=useMemo(()=>grouped(data.assets?.rows,'hardware',ar),[data.assets,ar]);
  const reports=useMemo(()=>grouped(data.report?.rows,'status',ar),[data.report,ar]);
