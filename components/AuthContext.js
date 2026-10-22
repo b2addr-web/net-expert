@@ -38,29 +38,31 @@ const baseAccount = authUser => authUser ? {
   accountLoading: true,
 } : null;
 
-async function loadProfile(authUser, attempt = 0) {
+async function loadProfile(authUser, attempt = 0, repairAttempted = false) {
   if (!supabase || !authUser) return null;
   const { data, error } = await supabase.from('profiles').select('id,email,full_name,department,role,status,created_at').eq('id', authUser.id).maybeSingle();
   if (error) {
-    if (attempt < 3) { await wait(300 * (attempt + 1)); return loadProfile(authUser, attempt + 1); }
+    if (attempt < 3) { await wait(300 * (attempt + 1)); return loadProfile(authUser, attempt + 1, repairAttempted); }
     throw error;
   }
   if (!data) {
     if (attempt < 3) {
       await wait(250 * (attempt + 1));
-      return loadProfile(authUser, attempt + 1);
+      return loadProfile(authUser, attempt + 1, repairAttempted);
     }
+    if (repairAttempted) throw new Error('PROFILE_MISSING_AFTER_REPAIR');
     const { error: repairError } = await supabase.rpc('repair_my_account');
     if (repairError) throw repairError;
-    return loadProfile(authUser, 0);
+    return loadProfile(authUser, 0, true);
   }
   const { data: access, error: accessError } = await supabase.rpc('get_my_access');
   if (accessError) throw accessError;
   if (!access?.organization_id) {
+    if (repairAttempted) throw new Error('WORKSPACE_ACCESS_MISSING');
     const { error: repairError } = await supabase.rpc('repair_my_account');
     if (repairError) throw repairError;
-    if (attempt < 4) { await wait(300); return loadProfile(authUser, attempt + 1); }
-    throw new Error('WORKSPACE_ACCESS_MISSING');
+    await wait(300);
+    return loadProfile(authUser, 0, true);
   }
   const { data: exportPermissions, error: exportError } = await supabase.rpc('get_my_export_permissions');
   if (exportError) console.warn('Export permissions could not be loaded:', exportError.message);
@@ -86,8 +88,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!supabase) { setReady(true); return undefined; }
     let active = true;
+    let authRevision = 0;
+    const initialRevision = authRevision;
     supabase.auth.getSession().then(async ({ data, error }) => {
-      if (!active) return;
+      if (!active || initialRevision !== authRevision) return;
       const authUser = data?.session?.user;
       try {
         if (error) throw error;
@@ -95,26 +99,28 @@ export function AuthProvider({ children }) {
         setRecoveryMode(Boolean(authUser && readRecoveryGrant() === authUser.id));
         if (authUser) {
           const profile = await loadProfile(authUser);
-          if (active) { setUser(profile); setProfileError(null); }
+          if (active && initialRevision === authRevision) { setUser(profile); setProfileError(null); }
         }
       } catch (sessionError) {
         console.error('Session initialization failed:', { message: sessionError.message, code: sessionError.code });
         // Do not discard a valid authenticated session because a secondary
         // profile/permission request was temporarily unavailable.
-        if (active) {
+        if (active && initialRevision === authRevision) {
           setUser(current => current && authUser && current.id === authUser.id && !current.accountLoading ? current : baseAccount(authUser));
           setProfileError(sessionError);
         }
-      } finally { if (active) setReady(true); }
+      } finally { if (active && initialRevision === authRevision) setReady(true); }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
+      const revision = ++authRevision;
       if (event === 'PASSWORD_RECOVERY' && session?.user) { saveRecoveryGrant(session.user.id); setRecoveryMode(true); }
       if (event === 'SIGNED_OUT' || !session?.user) { clearHomeCache(); clearRecoveryGrant(); setRecoveryMode(false); setUser(null); setProfileError(null); }
       else {
         setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
         window.setTimeout(() => {
-          loadProfile(session.user).then(profile => { if (active) { setUser(profile); setProfileError(null); } }).catch(error => { console.error('Profile synchronization failed:', { message: error.message, code: error.code }); if (active) setProfileError(error); });
+          if (!active || revision !== authRevision) return;
+          loadProfile(session.user).then(profile => { if (active && revision === authRevision) { setUser(profile); setProfileError(null); } }).catch(error => { console.error('Profile synchronization failed:', { message: error.message, code: error.code }); if (active && revision === authRevision) setProfileError(error); });
         }, 0);
       }
       setReady(true);
