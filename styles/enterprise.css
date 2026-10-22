@@ -68,6 +68,7 @@
 .enterprise-home-metric-top i{width:27px;height:27px;flex:none;display:grid;place-items:center;border-radius:7px;background:#e9f2ff;color:#2c75ec;font-style:normal}
 .enterprise-home-metric-top svg{width:16px;height:16px}
 .enterprise-home-metric strong{display:block;margin:8px 0 5px;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.enterprise-home-skeleton-value{display:block;width:54px;height:26px;margin:8px 0 5px;border-radius:6px;background:linear-gradient(90deg,#edf2f8 25%,#f8fafc 50%,#edf2f8 75%);background-size:200% 100%;animation:enterprise-skeleton 1.15s ease-in-out infinite}
 .enterprise-home-metric small{min-height:30px;color:#91a0b2;font-size:10px;line-height:1.5}
 .enterprise-home-panel{min-width:0;padding:17px;border:1px solid var(--ne-line);border-radius:12px;background:#fff;box-shadow:0 7px 25px #1a33590c}
 .enterprise-home-panel header h2{margin:0 0 3px;font-size:14px;color:var(--ne-ink)}
@@ -105,6 +106,8 @@
 .enterprise-home-chart-empty>span{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:#eef4fc;color:#6a92cc}
 .enterprise-home-chart-empty svg{width:18px;height:18px}
 .enterprise-home-chart-empty p{margin:0;font-size:11px;line-height:1.5}
+@keyframes enterprise-skeleton{from{background-position:200% 0}to{background-position:-200% 0}}
+@media(prefers-reduced-motion:reduce){.enterprise-home-skeleton-value{animation:none}}
 .enterprise-home-report-layout{display:flex;align-items:center;justify-content:center;gap:11px;min-height:170px}
 .enterprise-home-pie-wrap{position:relative;width:min(47%,166px);height:166px;flex:none}
 .enterprise-home-pie-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { storageGet, storageRemove, storageSet } from '../lib/browserStorage';
+import { clearHomeCache } from '../lib/home-cache';
 
 const AuthContext = createContext(null);
 const recoveryGrantKey = 'ne_password_recovery_grant';
@@ -109,7 +110,7 @@ export function AuthProvider({ children }) {
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
       if (event === 'PASSWORD_RECOVERY' && session?.user) { saveRecoveryGrant(session.user.id); setRecoveryMode(true); }
-      if (event === 'SIGNED_OUT' || !session?.user) { clearRecoveryGrant(); setRecoveryMode(false); setUser(null); setProfileError(null); }
+      if (event === 'SIGNED_OUT' || !session?.user) { clearHomeCache(); clearRecoveryGrant(); setRecoveryMode(false); setUser(null); setProfileError(null); }
       else {
         setUser(current => current?.id === session.user.id ? current : baseAccount(session.user));
         window.setTimeout(() => {
@@ -253,8 +254,8 @@ export function AuthProvider({ children }) {
   const deleteUser=async id=>{await organizationRequest('DELETE',{userId:id});setUsers(items=>items.filter(x=>x.id!==id))};
   const updateExportPermissions=async(id,p)=>{if(user?.role!=='company_admin')throw new Error('ADMIN_REQUIRED');const{error}=await supabase.from('member_export_permissions').upsert({organization_id:user.organization_id,user_id:id,can_export_excel:!!p.xlsx,can_export_pdf:!!p.pdf,can_export_financial:!!p.financial},{onConflict:'organization_id,user_id'});if(error)throw error;setUsers(items=>items.map(x=>x.id===id?{...x,export_permissions:p}:x));await supabase.rpc('log_organization_event',{action_name:'export_permissions_updated',target_id:id,event_details:p})};
 
-  const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; setUser(null); };
-  const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; setUser(null); };
+  const logout = async () => { await recordEvent('logout'); const { error } = await supabase.auth.signOut({ scope: 'local' }); if (error) throw error; clearHomeCache(); setUser(null); };
+  const logoutAll = async () => { await recordEvent('logout_all_sessions'); const { error } = await supabase.auth.signOut({ scope: 'global' }); if (error) throw error; clearHomeCache(); setUser(null); };
 
   return <AuthContext.Provider value={{ user, users, ready, profileError, retryProfile, configured: !!supabase, recoveryMode, login, signUp, resendActivation, requestPasswordReset, confirmEmailLink, updatePassword, refreshUsers, updateMember, updateExportPermissions, inviteUser, deleteUser, logout, logoutAll }}>{children}</AuthContext.Provider>;
 }
