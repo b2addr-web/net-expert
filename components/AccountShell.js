@@ -17,7 +17,7 @@ function FeatureIcon({ kind }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{path}</svg>;
 }
 
-export default function AccountShell({ ar, children }) {
+export default function AccountShell({ ar, onLanguage, children }) {
   const dir = ar ? 'rtl' : 'ltr';
   return <main className="login-shell" dir="ltr">
     <section className="login-product" dir={dir} aria-label={ar ? 'عن منصة NetExpert' : 'About NetExpert'}>
@@ -33,7 +33,7 @@ export default function AccountShell({ ar, children }) {
     </section>
     <section className="login-access" dir={dir}>
       <div className="login-access-inner">
-        <Brand className="login-mobile-brand" />
+        <div className="login-access-top"><Brand className="login-mobile-brand" />{onLanguage&&<button type="button" className="login-language" onClick={onLanguage} aria-label={ar?'Switch to English':'التبديل إلى العربية'}>{ar?'EN':'العربية'}</button>}</div>
         <div className="login-card">{children}</div>
         <footer className="login-access-footer"><span>© NetExpert {new Date().getFullYear()}</span><span>{ar ? 'الخصوصية والأمان' : 'Privacy & security'}</span></footer>
       </div>
