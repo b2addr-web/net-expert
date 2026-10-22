@@ -36,3 +36,16 @@ test('spreadsheet export neutralizes formula prefixes',async()=>{
   assert.match(source,/\^\[=\+\\-@\\t\\r\]/);
   assert.doesNotMatch(source,/from 'xlsx'/);
 });
+
+test('profile repair is bounded and stale auth loads cannot restore a signed-out user',async()=>{
+  const source=await read('../components/AuthContext.js');
+  assert.match(source,/if \(repairAttempted\) throw new Error\('PROFILE_MISSING_AFTER_REPAIR'\)/);
+  assert.match(source,/return loadProfile\(authUser, 0, true\)/);
+  assert.match(source,/const revision = \+\+authRevision/);
+  assert.match(source,/active && revision === authRevision/);
+});
+
+test('intake email has a finite network timeout',async()=>{
+  const source=await read('../lib/intake-server.js');
+  assert.match(source,/signal:AbortSignal\.timeout\(8000\)/);
+});
