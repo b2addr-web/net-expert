@@ -5,3 +5,4 @@ overrides:
   source-map-js: 1.2.2
 allowBuilds:
   tesseract.js: false
+  unrs-resolver: false
