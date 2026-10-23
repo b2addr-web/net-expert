@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import Link from 'next/link';
 import {storageGet,storageSet} from '../lib/browserStorage';
 
 export const sidebarGroups=[
@@ -45,7 +46,7 @@ export default function WorkspaceSidebar({ar,page,organizationName,navigation,on
  const visibleGroups=sidebarGroups.filter(group=>group.items.some(item=>labels[item]));
  const compact=collapsed&&!mobile;
  return <aside className={`workspace-sidebar sidebar-organized${compact?' sidebar-collapsed':''}${mobileOpen?' sidebar-mobile-open':''}`}>
-  <a href="/?module=home" className="workspace-brand" title="NetExpert"><b>N</b><span>NetExpert<small>{organizationName}</small></span></a>
+  <Link href="/?module=home" className="workspace-brand" title="NetExpert"><b>N</b><span>NetExpert<small>{organizationName}</small></span></Link>
   <nav id="workspace-navigation" aria-label={ar?'التنقل':'Workspace navigation'}>
    {labels.home&&<button type="button" className={`sidebar-home${page==='home'?' active':''}`} aria-current={page==='home'?'page':undefined} title={ar?'الصفحة الرئيسية':'Home'} onClick={()=>onNavigate('home')}><NavIcon name="home"/><span className="sidebar-text">{labels.home}</span></button>}
    {visibleGroups.map(group=>{const active=group.key===activeGroup,expanded=open[group.key]||active,children=group.items.filter(item=>labels[item]);return <div className={`sidebar-group${active?' has-active':''}`} key={group.key}>
