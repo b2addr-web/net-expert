@@ -65,3 +65,14 @@
 @media(max-width:480px){.login-access-inner{padding:24px 16px 18px}.login-access-top{margin-bottom:21px}.login-mobile-brand{font-size:19px}.login-mobile-brand .login-product-mark{width:39px;height:39px;font-size:25px}.login-card{padding:27px 21px;border-radius:16px}.login-heading{margin-bottom:24px}.login-heading h2{font-size:25px}.login-access-footer{margin-top:19px;gap:10px}.login-access-footer span{display:block}.login-options{align-items:flex-start}.login-secondary-actions{flex-direction:column}}
 @media(max-height:700px) and (min-width:901px){.login-product-inner{padding-block:24px}.login-proposition{padding:8px 0;margin:auto 0 10px}.login-proposition h1{font-size:34px}.login-description{margin-top:10px}.login-capabilities{gap:6px}.login-capabilities li{min-height:57px;padding-block:7px}.login-card{padding:28px 36px}.login-heading{margin-bottom:18px}.login-access-footer{margin-top:12px}}
 @media(prefers-reduced-motion:reduce){.login-shell *{scroll-behavior:auto;transition:none!important;animation:none!important}}
+
+/* Refined compact sign-in composition */
+.login-product-inner{justify-content:center;gap:0}
+.login-proposition{margin:auto 0;padding:20px 0 38px}
+.login-proposition h1{max-width:540px;font-size:clamp(34px,3.7vw,56px);line-height:1.25}
+.login-description{max-width:430px;margin-top:18px;font-size:17px;line-height:1.8;color:#d2e0f2}
+.login-brand{font-size:24px}.login-product-mark{width:48px;height:48px;font-size:30px}
+.login-card form{gap:12px}.login-options{margin-top:-2px}.login-feedback{min-height:30px}.login-submit{margin-top:0!important}.login-secondary-actions{margin-top:14px;padding-top:13px}.login-support{margin-top:14px;padding-top:12px}
+@media(max-width:1050px) and (min-width:901px){.login-product-inner{padding-inline:38px}.login-proposition h1{font-size:38px}.login-description{font-size:15px}}
+@media(max-width:900px){.login-card{padding:28px 32px}.login-heading{margin-bottom:18px}.login-card form{gap:12px}}
+@media(max-width:480px){.login-card{padding:24px 20px}.login-heading{margin-bottom:18px}.login-access-inner{padding-top:18px}.login-submit{min-height:46px}}

@@ -2,6 +2,7 @@ import '../styles/globals.css';
 import '../styles/workspace.css';
 import '../styles/sidebar.css';
 import '../styles/home.css';
+import '../styles/marketing.css';
 import '../styles/knowledge-enterprise.css';
 import '../styles/import.css';
 import '../styles/intake.css';
