@@ -1,7 +1,10 @@
 /** @type {import('next').NextConfig} */
+const scriptSource = process.env.NODE_ENV === 'development'
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'";
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+  scriptSource,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://uycntpxrfbqtxydhsbbi.supabase.co",
