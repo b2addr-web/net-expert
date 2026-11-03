@@ -8,6 +8,10 @@
     "start": "next start",
     "test:node": "node --test tests/*.test.mjs",
     "test:e2e": "playwright test",
+    "security:verify": "node tests/security-verify.mjs",
+    "test:tenant:local": "node --test tests/local-supabase/*.test.mjs",
+    "supabase:local:start": "supabase start",
+    "supabase:local:status": "supabase status --output json",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -19,12 +23,14 @@
     "@tiptap/react": "2.27.2",
     "@tiptap/starter-kit": "2.27.2",
     "exceljs": "4.4.0",
+    "mammoth": "1.11.0",
     "next": "15.5.28",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "3.3.0",
-    "sanitize-html": "2.17.0",
-    "tesseract.js": "7.0.0"
+    "sanitize-html": "2.18.1",
+    "tesseract.js": "7.0.0",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -35,6 +41,7 @@
     "eslint-config-next": "15.5.28",
     "jsdom": "26.1.0",
     "postcss": "^8",
+    "supabase": "2.122.0",
     "tailwindcss": "^3"
   }
 }
