@@ -24,11 +24,12 @@ export default function MonitorResponseChart({rows=[],period='1d',ar=false,label
  const host=useRef(null);
  const [width,setWidth]=useState(720),[hovered,setHovered]=useState(null);
  const valid=rows.filter(row=>row.avg_response_ms!==null&&Number(row.response_count||0)>0&&Number.isFinite(Number(row.avg_response_ms)));
+ const hasChart=valid.length>=2;
  useEffect(()=>{
   const element=host.current;if(!element)return;
   const observer=new ResizeObserver(entries=>setWidth(Math.max(200,Math.round(entries[0].contentRect.width))));
   observer.observe(element);return()=>observer.disconnect();
- },[valid.length>=2]);
+ },[hasChart]);
  useEffect(()=>setHovered(null),[period,rows]);
 
  if(valid.length<2)return <p className="work-muted monitor-chart-empty" role="status">{empty}</p>;

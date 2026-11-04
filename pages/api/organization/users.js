@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   const { data: authData, error: authError } = await scoped.auth.getUser(token);
   if (authError || !authData.user) return res.status(401).json({ error: 'INVALID_SESSION' });
   const { data: access, error: accessError } = await scoped.rpc('get_my_access');
-  if (accessError || access?.role !== 'company_admin') return res.status(403).json({ error: 'ADMIN_REQUIRED' });
+  if (accessError || access?.status !== 'active' || access?.role !== 'company_admin' || !access?.organization_id) return res.status(403).json({ error: 'ADMIN_REQUIRED' });
 
   try {
     const userId = String(req.body?.userId || '');

@@ -1,0 +1,21 @@
+project_id = "net-expert-security-phase4g-clean"
+
+[db]
+port = 56432
+shadow_port = 56420
+
+[api]
+port = 56431
+
+[auth]
+site_url = "http://127.0.0.1:3014"
+additional_redirect_urls = ["http://127.0.0.1:3014/**"]
+
+[studio]
+port = 56433
+
+[inbucket]
+port = 56434
+
+[analytics]
+port = 56437

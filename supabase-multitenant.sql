@@ -172,6 +172,20 @@ update expenses set organization_id=(select id from organizations order by creat
 update assets set organization_id=(select id from organizations order by created_at limit 1) where organization_id is null;
 update audit_log set organization_id=(select id from organizations order by created_at limit 1) where organization_id is null;
 
+-- Bootstrap the write gate before policies reference it. The workspace module
+-- later replaces this function with the same authorization contract.
+create or replace function public.workspace_write(p_module text) returns boolean
+language sql stable security definer set search_path=public as $$
+  select public.has_section_access(p_module)
+    and exists (
+      select 1 from public.organization_members
+      where organization_id=public.current_organization_id()
+        and user_id=auth.uid()
+        and status='active'
+        and role in ('company_admin','manager','operator')
+    )
+$$;
+
 alter table organizations enable row level security;
 alter table organization_members enable row level security;
 alter table member_permissions enable row level security;
@@ -197,8 +211,8 @@ create policy tenant_audit_admin on organization_audit_logs for select to authen
 drop policy if exists devices_authenticated_read on devices; drop policy if exists devices_admin_insert on devices; drop policy if exists devices_admin_update on devices; drop policy if exists devices_admin_delete on devices;
 drop policy if exists tenant_devices_read on devices; drop policy if exists tenant_devices_write on devices; drop policy if exists tenant_devices_update on devices; drop policy if exists tenant_devices_delete on devices;
 create policy tenant_devices_read on devices for select to authenticated using(organization_id=current_organization_id() and has_section_access('assets'));
-create policy tenant_devices_write on devices for insert to authenticated with check(organization_id=current_organization_id() and has_section_access('assets'));
-create policy tenant_devices_update on devices for update to authenticated using(organization_id=current_organization_id() and has_section_access('assets')) with check(organization_id=current_organization_id());
+create policy tenant_devices_write on devices for insert to authenticated with check(organization_id=current_organization_id() and workspace_write('assets'));
+create policy tenant_devices_update on devices for update to authenticated using(organization_id=current_organization_id() and workspace_write('assets')) with check(organization_id=current_organization_id() and workspace_write('assets'));
 create policy tenant_devices_delete on devices for delete to authenticated using(organization_id=current_organization_id() and is_company_admin());
 drop policy if exists audit_authenticated_read on audit_log; drop policy if exists audit_authenticated_insert on audit_log;
 drop policy if exists tenant_audit_read on audit_log; drop policy if exists tenant_audit_insert on audit_log;
@@ -206,10 +220,14 @@ create policy tenant_audit_read on audit_log for select to authenticated using(o
 create policy tenant_audit_insert on audit_log for insert to authenticated with check(organization_id=current_organization_id());
 drop policy if exists purchases_admin_access on purchases; drop policy if exists expenses_admin_access on expenses; drop policy if exists financial_assets_admin_access on assets;
 drop policy if exists tenant_purchases on purchases; drop policy if exists tenant_expenses on expenses; drop policy if exists tenant_financial_assets on assets;
-create policy tenant_purchases on purchases for all to authenticated using(organization_id=current_organization_id() and has_section_access('procurement')) with check(organization_id=current_organization_id() and has_section_access('procurement'));
-create policy tenant_expenses on expenses for all to authenticated using(organization_id=current_organization_id() and has_section_access('reports')) with check(organization_id=current_organization_id() and has_section_access('reports'));
-create policy tenant_financial_assets on assets for all to authenticated using(organization_id=current_organization_id() and has_section_access('assets')) with check(organization_id=current_organization_id() and has_section_access('assets'));
+create policy tenant_purchases on purchases for all to authenticated using(organization_id=current_organization_id() and workspace_write('procurement')) with check(organization_id=current_organization_id() and workspace_write('procurement'));
+create policy tenant_expenses on expenses for all to authenticated using(organization_id=current_organization_id() and workspace_write('reports')) with check(organization_id=current_organization_id() and workspace_write('reports'));
+create policy tenant_financial_assets on assets for all to authenticated using(organization_id=current_organization_id() and workspace_write('assets')) with check(organization_id=current_organization_id() and workspace_write('assets'));
 
 grant select on organizations,organization_members,member_permissions,organization_invitations,organization_audit_logs to authenticated;
 grant insert,update,delete on member_permissions,organization_invitations to authenticated;
 grant update on organization_members to authenticated;
+-- RLS remains the authorization boundary; these table grants expose only the
+-- operations that the device policies can further constrain per tenant/role.
+grant select,insert,update,delete on devices to authenticated;
+grant usage,select on sequence assets_id_seq,purchases_id_seq,expenses_id_seq to authenticated;

@@ -2,19 +2,23 @@
 const scriptSource = process.env.NODE_ENV === 'development'
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
   : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'";
+const securityTestUrl = process.env.NEXT_PUBLIC_SECURITY_TEST_SUPABASE_URL;
+const localSecurityTest = process.env.NEXT_PUBLIC_SECURITY_TEST_MODE === '1'
+  && /^http:\/\/127\.0\.0\.1:(55431|56431|57431)$/.test(securityTestUrl || '');
+const localSource = localSecurityTest ? ` ${securityTestUrl}` : '';
 const contentSecurityPolicy = [
   "default-src 'self'",
   scriptSource,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://uycntpxrfbqtxydhsbbi.supabase.co",
-  "connect-src 'self' https://uycntpxrfbqtxydhsbbi.supabase.co wss://uycntpxrfbqtxydhsbbi.supabase.co",
+  `img-src 'self' data: blob: https://uycntpxrfbqtxydhsbbi.supabase.co${localSource}`,
+  `connect-src 'self' https://uycntpxrfbqtxydhsbbi.supabase.co wss://uycntpxrfbqtxydhsbbi.supabase.co${localSource}`,
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  'upgrade-insecure-requests',
+  ...(localSecurityTest ? [] : ['upgrade-insecure-requests']),
 ].join('; ');
 
 module.exports = {

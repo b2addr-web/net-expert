@@ -1,0 +1,12 @@
+# This file is intentionally not loaded by Next.js.
+# Copy values printed by `pnpm run supabase:local:start`; never use production values.
+SUPABASE_LOCAL_URL=http://127.0.0.1:54321
+SUPABASE_LOCAL_ANON_KEY=LOCAL_ANON_KEY_FROM_SUPABASE_STATUS
+SUPABASE_LOCAL_SERVICE_ROLE_KEY=LOCAL_SERVICE_ROLE_KEY_FROM_SUPABASE_STATUS
+
+# Enables the destructive-on-purpose test fixtures only after the URL guard above
+# confirms the target is an HTTP loopback address. Never set this in .env.local.
+RUN_LOCAL_SUPABASE_TESTS=1
+
+# Only needed for tests/local-supabase/api-authz.test.mjs after `pnpm dev` starts.
+NETEXPERT_LOCAL_APP_URL=http://127.0.0.1:3000

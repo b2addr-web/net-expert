@@ -1,3 +1,16 @@
+project_id = "net-expert-security-phase4"
+
+# Local-only override: Windows reserves the default 54322 port on this host.
+[db]
+port = 55432
+
+[api]
+port = 55431
+
+[auth]
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/**", "http://localhost:3000/**"]
+
 [functions.invite-organization-user]
 # Auth and company_admin permissions are checked inside the function.
 verify_jwt = false

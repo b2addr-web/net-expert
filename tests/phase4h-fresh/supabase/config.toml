@@ -1,0 +1,21 @@
+project_id = "net-expert-security-phase4h-fresh"
+
+[db]
+port = 57432
+shadow_port = 57420
+
+[api]
+port = 57431
+
+[auth]
+site_url = "http://127.0.0.1:3015"
+additional_redirect_urls = ["http://127.0.0.1:3015/**"]
+
+[studio]
+port = 57433
+
+[inbucket]
+port = 57434
+
+[analytics]
+port = 57437

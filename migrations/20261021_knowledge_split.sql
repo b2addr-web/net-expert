@@ -118,29 +118,29 @@ create policy knowledge_read on public.knowledge_items for select to authenticat
 drop policy knowledge_insert on public.knowledge_items;
 create policy knowledge_insert on public.knowledge_items for insert to authenticated
  with check (organization_id=public.current_organization_id() and created_by=(select auth.uid()) and
-  (case when item_type='file' then public.has_section_access('files') else public.has_section_access('notes') end) and
+  (case when item_type='file' then public.workspace_write('files') else public.workspace_write('notes') end) and
   (public.get_my_access()->>'role') in ('company_admin','operator','manager') and
   (file_path is null or file_path like organization_id::text||'/'||created_by::text||'/%'));
 drop policy knowledge_update on public.knowledge_items;
 create policy knowledge_update on public.knowledge_items for update to authenticated
  using (organization_id=public.current_organization_id() and created_by=(select auth.uid()) and
-  (case when item_type='file' then public.has_section_access('files') else public.has_section_access('notes') end) and
+  (case when item_type='file' then public.workspace_write('files') else public.workspace_write('notes') end) and
   (public.get_my_access()->>'role') in ('company_admin','operator','manager'))
  with check (organization_id=public.current_organization_id() and created_by=(select auth.uid()) and
-  (case when item_type='file' then public.has_section_access('files') else public.has_section_access('notes') end) and
+  (case when item_type='file' then public.workspace_write('files') else public.workspace_write('notes') end) and
   (public.get_my_access()->>'role') in ('company_admin','operator','manager') and
   (file_path is null or file_path like organization_id::text||'/'||created_by::text||'/%'));
 drop policy knowledge_delete on public.knowledge_items;
 create policy knowledge_delete on public.knowledge_items for delete to authenticated
  using (organization_id=public.current_organization_id() and created_by=(select auth.uid()) and
-  (case when item_type='file' then public.has_section_access('files') else public.has_section_access('notes') end) and
+  (case when item_type='file' then public.workspace_write('files') else public.workspace_write('notes') end) and
   (public.get_my_access()->>'role') in ('company_admin','operator','manager'));
 
 drop policy knowledge_file_upload on storage.objects;
 create policy knowledge_file_upload on storage.objects for insert to authenticated
  with check (bucket_id='knowledge-files' and (storage.foldername(name))[1]=public.current_organization_id()::text
  and (storage.foldername(name))[2]=(select auth.uid())::text
- and (public.has_section_access('notes') or public.has_section_access('files'))
+ and (public.workspace_write('notes') or public.workspace_write('files'))
  and (public.get_my_access()->>'role') in ('company_admin','operator','manager'));
 drop policy knowledge_file_download on storage.objects;
 create or replace function public.knowledge_storage_readable(object_name text)
@@ -157,7 +157,7 @@ begin
  -- A writer may clean up only their own orphaned upload.
  return (storage.foldername(object_name))[1]=public.current_organization_id()::text
    and (storage.foldername(object_name))[2]=auth.uid()::text
-   and (public.has_section_access('notes') or public.has_section_access('files'))
+   and (public.workspace_write('notes') or public.workspace_write('files'))
    and (public.get_my_access()->>'role') in ('company_admin','operator','manager');
 end $$;
 revoke all on function public.knowledge_storage_readable(text) from public;
@@ -168,7 +168,7 @@ drop policy knowledge_file_cleanup on storage.objects;
 create policy knowledge_file_cleanup on storage.objects for delete to authenticated
  using (bucket_id='knowledge-files' and (storage.foldername(name))[1]=public.current_organization_id()::text
  and (storage.foldername(name))[2]=(select auth.uid())::text
- and (public.has_section_access('notes') or public.has_section_access('files'))
+ and (public.workspace_write('notes') or public.workspace_write('files'))
  and (public.get_my_access()->>'role') in ('company_admin','operator','manager'));
 
 commit;
