@@ -2,9 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument } from 'pdf-lib';
+import { loadStagingKeys, stagingUrl as supabase } from './staging-supabase-keys.mjs';
 
-const ref = 'bsxhmijczvsyidbgptfz';
-const supabase = 'https://' + ref + '.supabase.co';
 const preview = process.env.NETEXPERT_STAGING_PREVIEW;
 const worker = process.env.WHATSAPP_WORKER_SECRET;
 const bucket = 'knowledge-files';
@@ -37,15 +36,7 @@ let db, passed = false, cleanupErrors = 0, stage = 'preflight';
 try {
   check(/^https:\/\/net-expert-[a-z0-9]+-b2addr-9372s-projects\.vercel\.app$/.test(preview ?? ''), 'Set the exact NetExpert Preview URL');
   check(worker, 'Set WHATSAPP_WORKER_SECRET in the current PowerShell session');
-  const r = cli(`pnpm exec supabase projects api-keys --project-ref ${ref} --reveal --output-format json`);
-  check(r.status === 0, 'Supabase CLI cannot obtain the Staging API keys');
-  const obj = JSON.parse(r.stdout);
-  const rows = Array.isArray(obj) ? obj : obj.keys ?? obj.data ?? obj.result;
-  check(Array.isArray(rows), 'Unrecognized Supabase CLI key response');
-  const key = row => row?.api_key ?? row?.key;
-  const anon = key(rows.find(x => x.type === 'publishable')) ?? key(rows.find(x => x.name === 'anon'));
-  const service = key(rows.find(x => x.name === 'service_role')) ?? key(rows.find(x => x.type === 'secret'));
-  check(anon && service, 'Staging API keys are missing');
+  const { anon, service } = loadStagingKeys(process.env, cli);
   db = createClient(supabase, service, { auth });
   const active = async () => data(await db.from('whatsapp_send_jobs').select('id,signature_request_id').in('status', ['pending', 'processing']).limit(2), 'Cannot read Staging queue');
   check((await active()).length === 0, 'Staging queue contains unrelated work');
