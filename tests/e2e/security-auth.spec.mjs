@@ -4,9 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 
 const apiUrl = process.env.SUPABASE_LOCAL_URL;
 const appUrl = process.env.NETEXPERT_LOCAL_APP_URL;
+const localTargets = new Map([
+  ['http://127.0.0.1:55431', 'http://127.0.0.1:3013'],
+  ['http://127.0.0.1:57431', 'http://127.0.0.1:3015'],
+]);
 if (process.env.NEXT_PUBLIC_SECURITY_TEST_MODE !== '1'
-  || !/^http:\/\/127\.0\.0\.1:55431$/.test(apiUrl || '')
-  || !/^http:\/\/127\.0\.0\.1:3013$/.test(appUrl || '')
+  || !localTargets.has(apiUrl)
+  || localTargets.get(apiUrl) !== appUrl
   || !process.env.SUPABASE_LOCAL_SERVICE_ROLE_KEY) {
   throw new Error('Real Auth browser tests require the guarded local Supabase runner.');
 }
