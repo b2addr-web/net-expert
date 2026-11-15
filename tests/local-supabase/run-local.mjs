@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
 const playwright = process.argv.includes('--playwright');
+const whatsapp = process.argv.includes('--whatsapp');
 const phase4h = process.argv.includes('--phase4h');
 const verify = process.argv.includes('--verify');
 const clean = process.argv.includes('--clean') || verify || phase4h;
@@ -46,6 +47,11 @@ const env = {
   RESEND_FROM_EMAIL: '',
   NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${appPort}`,
   INTAKE_LINK_SECRET: 'phase4g-local-only-secret-with-more-than-32-characters',
+  ...(whatsapp ? {
+    WHATSAPP_PROVIDER: 'mock',
+    WHATSAPP_WORKER_SECRET: 'local-worker-secret',
+    SUPABASE_URL: api.href.replace(/\/$/, ''),
+  } : {}),
   NETEXPERT_LOCAL_APP_URL: `http://127.0.0.1:${appPort}`,
   ...(playwright ? {
     NEXT_PUBLIC_SECURITY_TEST_MODE: '1',
@@ -60,9 +66,10 @@ try {
   let occupied = false;
   try { const response = await fetch(env.NETEXPERT_LOCAL_APP_URL, { signal: AbortSignal.timeout(800) }); occupied = response.status > 0; } catch {}
   if (occupied) throw new Error('The local test port is already occupied.');
+  const mode = playwright || whatsapp ? 'dev' : 'start';
   app = process.platform === 'win32'
-    ? spawn('cmd.exe', ['/d', '/s', '/c', `pnpm exec next ${playwright ? 'dev' : 'start'} -p ${appPort}`], { cwd: root, env, stdio: 'ignore', windowsHide: true })
-    : spawn('pnpm', ['exec', 'next', playwright ? 'dev' : 'start', '-p', appPort], { cwd: root, env, stdio: 'ignore' });
+    ? spawn('cmd.exe', ['/d', '/s', '/c', `pnpm exec next ${mode} -p ${appPort}`], { cwd: root, env, stdio: 'ignore', windowsHide: true })
+    : spawn('pnpm', ['exec', 'next', mode, '-p', appPort], { cwd: root, env, stdio: 'ignore' });
   let ready = false;
   for (let attempt = 0; attempt < 40; attempt++) {
     if (app.exitCode !== null) break;
@@ -77,7 +84,7 @@ try {
   process.exit(1);
 }
 
-const files = readdirSync(here).filter(name => name.endsWith('.test.mjs')).map(name => join(here, name));
+const files = (whatsapp ? ['whatsapp-staging.test.mjs'] : readdirSync(here).filter(name => name.endsWith('.test.mjs'))).map(name => join(here, name));
 const child = spawnSync(playwright ? (process.platform === 'win32' ? 'cmd.exe' : 'pnpm') : process.execPath,
   playwright ? (process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm exec playwright test tests/e2e/security-auth.spec.mjs'] : ['exec', 'playwright', 'test', 'tests/e2e/security-auth.spec.mjs']) : ['--test', ...files], {
   cwd: root, stdio: 'inherit', windowsHide: true,
