@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const migration=await readFile(new URL('../supabase/migrations/20261114174219_whatsapp_business_phase_f.sql',import.meta.url),'utf8');
+const settings=await readFile(new URL('../pages/api/whatsapp/settings.js',import.meta.url),'utf8');
+const webhook=await readFile(new URL('../pages/api/whatsapp/webhook.js',import.meta.url),'utf8');
+const provider=await readFile(new URL('../lib/whatsapp.js',import.meta.url),'utf8');
+test('WhatsApp schema is tenant scoped and secrets stay private',()=>{assert.match(migration,/create schema if not exists private/);assert.match(migration,/private\.whatsapp_credentials/);assert.match(migration,/revoke all on private\.whatsapp_credentials from public,anon,authenticated/);assert.match(migration,/organization_id uuid/);assert.match(migration,/idempotency_key text not null unique/);assert.match(migration,/whatsapp_webhook_events/)});
+test('company account ownership is checked server side',()=>{assert.match(settings,/eq\('organization_id',org\)/);assert.match(settings,/eq\('account_kind','company'\)/);assert.match(settings,/ACCOUNT_NOT_OWNED/);assert.match(settings,/enabled:false/)});
+test('webhook requires Meta signature and deduplicates provider events',()=>{assert.match(webhook,/x-hub-signature-256/);assert.match(webhook,/timingSafeEqual/);assert.match(webhook,/provider_event_id/);assert.match(webhook,/23505/)});
+test('mock provider is explicit and Meta provider remains disabled',()=>{assert.match(provider,/class MockWhatsAppProvider/);assert.match(provider,/class MetaWhatsAppProvider/);assert.match(provider,/META_PROVIDER_DISABLED/);assert.match(provider,/signature:\${signatureRequestId}/)});

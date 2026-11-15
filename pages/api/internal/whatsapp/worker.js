@@ -1,0 +1,3 @@
+import {serviceSupabase} from '../../../../lib/serverSupabase';
+import {processWhatsAppQueue} from '../../../../lib/whatsapp-worker';
+export default async function handler(req,res){if(req.method!=='POST')return res.status(405).end();const secret=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');if(!process.env.WHATSAPP_WORKER_SECRET||secret!==process.env.WHATSAPP_WORKER_SECRET)return res.status(401).json({error:'WORKER_UNAUTHORIZED'});try{const results=await processWhatsAppQueue(serviceSupabase(),undefined,Math.min(25,Math.max(1,Number(req.body?.limit)||10)));return res.status(200).json({results})}catch(e){return res.status(503).json({error:'WORKER_FAILED'})}}

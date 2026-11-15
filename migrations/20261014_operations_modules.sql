@@ -29,7 +29,7 @@ language sql stable security definer set search_path=public as $$
  from organization_members m join profiles p on p.id=m.user_id where m.organization_id=current_organization_id() and is_company_admin() order by m.joined_at
  $$;
 
-create table public.service_subscriptions (
+create table if not exists public.service_subscriptions (
  id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.organizations(id) on delete cascade,
  name text not null check(length(trim(name)) between 1 and 160), provider text not null check(length(trim(provider)) between 1 and 160),
  description text not null default '' check(length(description)<=2000), start_date date not null, end_date date not null,
@@ -39,8 +39,8 @@ create table public.service_subscriptions (
  version integer not null default 1, created_by uuid references auth.users(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
  check(end_date>=start_date)
 );
-create index service_subscriptions_org_end on public.service_subscriptions(organization_id,end_date);
-create unique index service_subscriptions_no_duplicate on public.service_subscriptions(organization_id,lower(name),lower(provider),start_date,end_date);
+create index if not exists service_subscriptions_org_end on public.service_subscriptions(organization_id,end_date);
+create unique index if not exists service_subscriptions_no_duplicate on public.service_subscriptions(organization_id,lower(name),lower(provider),start_date,end_date);
 
 create table public.monitor_sites (
  id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.organizations(id) on delete cascade,

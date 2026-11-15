@@ -16,13 +16,14 @@ import WorkspaceTopbar from '../components/WorkspaceTopbar';
 import HomePanel from '../components/HomePanel';
 import NotesPanel from '../components/NotesPanel';
 import FilesPanel from '../components/FilesPanel';
+import ElectronicSignaturePanel,{SignatureRequestForm} from '../components/ElectronicSignaturePanel';
 import {T} from '../lib/data';
 import {canAccessPage} from '../lib/rbac';
 import {storageGet,storageSet} from '../lib/browserStorage';
 import {supabase} from '../lib/supabase';
 import {clearHomeCache} from '../lib/home-cache';
 import MarketingLanding from '../components/MarketingLanding';
-const navigation=[['home','Home','الصفحة الرئيسية'],['report','Technical Reports','البلاغات'],['device_request','Device Requests','طلبات الأجهزة'],['purchasing','Purchasing','المشتريات'],['assets','Devices','الأجهزة التقنية'],['sim','SIM Cards','شرائح الاتصال'],['inventory','IT Inventory','المخزون التقني'],['subscriptions','Subscriptions','إدارة الاشتراكات'],['monitoring','Website Monitoring','مراقبة المواقع'],['notes','Notes','الملاحظات'],['files','Files','الملفات'],['reports','Reports','التقارير'],['exports','Export Center','مركز التصدير'],['administration','Administration','الإدارة']];
+const navigation=[['home','Home','الصفحة الرئيسية'],['report','Technical Reports','البلاغات'],['device_request','Device Requests','طلبات الأجهزة'],['purchasing','Purchasing','المشتريات'],['assets','Devices','الأجهزة التقنية'],['sim','SIM Cards','شرائح الاتصال'],['inventory','IT Inventory','المخزون التقني'],['subscriptions','Subscriptions','إدارة الاشتراكات'],['monitoring','Website Monitoring','مراقبة المواقع'],['notes','Notes','الملاحظات'],['files','Files','الملفات'],['signatures','Electronic signature','التوقيع الإلكتروني'],['reports','Reports','التقارير'],['exports','Export Center','مركز التصدير'],['administration','Administration','الإدارة']];
 export default function NetExpert(){
  const {user,ready,recoveryMode,profileError,retryProfile,logout,logoutAll}=useAuth(),router=useRouter();const [lang,setLang]=useState('en'),[menu,setMenu]=useState(false),[mobileOpen,setMobileOpen]=useState(false),[workspaces,setWorkspaces]=useState([]),[users,setUsers]=useState(false),[searchOpen,setSearchOpen]=useState(false),[error,setError]=useState('');const ar=lang==='ar',t=T[lang],page=typeof router.query.module==='string'?router.query.module:'sim';
  useEffect(()=>{const stored=storageGet('localStorage','ne_language');if(stored==='ar')setLang(stored)},[]);
@@ -31,6 +32,8 @@ export default function NetExpert(){
  const go=key=>{setMobileOpen(false);return router.push({pathname:'/',query:{module:key}},undefined,{shallow:true})};
  const signout=async all=>{setError('');try{await(all?logoutAll():logout())}catch(e){setError(e.message)}};
  const switchWorkspace=async e=>{setError('');const {error}=await supabase.rpc('select_my_workspace',{workspace_id:e.target.value});if(error){setError(error.message);return}clearHomeCache();window.location.assign('/')};
+ // Phase B exposes the third knowledge property without changing Notes or Files.
+ if(user&&!user.accountLoading&&page==='signatures'&&accessible)return <div className="workspace-app" dir={ar?'rtl':'ltr'}><WorkspaceSidebar ar={ar} page={page} organizationName={user.organization_name} navigation={navigation} onNavigate={go} mobileOpen={mobileOpen}/><div className="workspace-main"><WorkspaceTopbar ar={ar} user={user} pageLabel={ar?'التوقيع الإلكتروني':'Electronic signature'} menu={menu} workspaces={workspaces} onSearch={()=>{setMenu(false);setSearchOpen(true)}} onLanguage={()=>{const next=ar?'en':'ar';setLang(next);storageSet('localStorage','ne_language',next)}} onMenu={()=>setMenu(!menu)} onMobileMenu={()=>setMobileOpen(value=>!value)} onWorkspace={switchWorkspace} onLogout={signout} onLogoutAll={signout}/><main><ElectronicSignaturePanel user={user} ar={ar}/></main></div></div>;
  // The public homepage should render immediately while the optional session
  // lookup completes. This avoids a blank screen when the auth service is slow
  // or unavailable, while the explicit login route keeps its loading state.
