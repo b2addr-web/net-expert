@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { PDFDocument } from 'pdf-lib';
 import { loadStagingKeys, stagingUrl as supabase } from './staging-supabase-keys.mjs';
 import { processStagingFixtureJob } from './staging-mock-worker.mjs';
+import { requestPreview } from './staging-preview-http.mjs';
 
 const preview = process.env.NETEXPERT_STAGING_PREVIEW;
 const bucket = 'knowledge-files';
@@ -16,26 +17,13 @@ const data = (r, reason) => { check(!r.error, reason); return r.data; };
 const cli = (command, input) => spawnSync('cmd.exe', ['/d', '/s', '/c', command], {
   input, encoding: 'utf8', windowsHide: true, timeout: 40000,
 });
-function api(path, { token, body, post = false } = {}) {
-  check(/^\/(?:api|sign)\/[A-Za-z0-9_/-]+$/.test(path), 'Invalid Preview route');
-  const config = ['silent', 'max-time = 25', 'write-out = "\\n%{http_code}"'];
-  if (post) config.push('request = "POST"');
-  if (token) config.push('header = ' + JSON.stringify('Authorization: Bearer ' + token));
-  if (body) config.push('header = "Content-Type: application/json"', 'data-binary = ' + JSON.stringify(JSON.stringify(body)));
-  const r = cli(`vercel curl ${path} --deployment ${preview} --scope b2addr-9372s-projects -- --config -`, config.join('\n') + '\n');
-  check(r.status === 0, 'Vercel CLI could not access the protected Preview');
-  const end = r.stdout.match(/\r?\n(\d{3})\s*$/);
-  check(end, 'Vercel CLI did not return an HTTP status');
-  const raw = r.stdout.slice(0, end.index);
-  let json;
-  try { json = JSON.parse(raw); } catch {}
-  return { status: Number(end[1]), json, page: raw.includes('__NEXT_DATA__') };
-}
+const api = (path, options) => requestPreview(fetch, preview, process.env.VERCEL_AUTOMATION_BYPASS_SECRET, path, options);
 
 let db, passed = false, cleanupErrors = 0, stage = 'preflight';
 try {
   check(/^https:\/\/net-expert-[a-z0-9]+-b2addr-9372s-projects\.vercel\.app$/.test(preview ?? ''), 'Set the exact NetExpert Preview URL');
-  check(api('/api/internal/whatsapp/worker', { post: true }).json?.error === 'WORKER_UNAUTHORIZED', 'Protected Preview POST or Worker authorization check failed');
+  const unauthorized = await api('/api/internal/whatsapp/worker', { post: true });
+  check(unauthorized.status === 401 && unauthorized.json?.error === 'WORKER_UNAUTHORIZED', 'Protected Preview POST or Worker authorization check failed');
   const { anon, service } = loadStagingKeys(process.env, cli);
   db = createClient(supabase, service, { auth });
 
@@ -68,10 +56,10 @@ try {
   const create = token => api('/api/signatures/requests', { post: true, token, body: {
     templateId: template.id, employeeName: 'Staging E2E ' + run, phoneE164: '+12025550101',
   } });
-  check(create(b.token).status === 400 && data(await b.client.from('signature_templates').select('id').eq('id', template.id), 'Cannot check template RLS').length === 0, 'Cross-company signing template access was not rejected');
+  check((await create(b.token)).status === 400 && data(await b.client.from('signature_templates').select('id').eq('id', template.id), 'Cannot check template RLS').length === 0, 'Cross-company signing template access was not rejected');
 
   stage = 'signing and archive';
-  const created = create(a.token);
+  const created = await create(a.token);
   check(created.status === 201 && /^\/sign\/[A-Za-z0-9_-]{40,}$/.test(created.json?.signingUrl), 'Preview request creation failed');
   const { id, signingUrl } = created.json;
   const signedPath = `${a.org}/signature-requests/${id}/signed.pdf`;
@@ -90,15 +78,15 @@ try {
   console.log('PASS scoped local Mock Worker against the Staging queue fixture');
 
   stage = 'signing and archive after Mock delivery';
-  const page = api(signingUrl);
+  const page = await api(signingUrl);
   check(page.status === 200 && page.page, 'Public signing page unavailable');
   const route = '/api/signatures/public/' + signingUrl.split('/').at(-1);
-  const opened = api(route);
+  const opened = await api(route);
   check(opened.status === 200 && opened.json?.requestId === id && opened.json.status === 'awaiting_signature' && new URL(opened.json.template.url).origin === supabase, 'Signing document did not come from Staging');
   const body = { signatureData: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', consent: 'Staging E2E test consent' };
-  const signed = api(route + '/sign', { post: true, body });
+  const signed = await api(route + '/sign', { post: true, body });
   check(signed.status === 200 && signed.json?.status === 'completed', 'Signing or PDF archive failed');
-  check(api(route + '/sign', { post: true, body }).status === 409, 'Duplicate signing was not rejected');
+  check((await api(route + '/sign', { post: true, body })).status === 409, 'Duplicate signing was not rejected');
   const request = data(await a.client.from('signature_requests').select('final_knowledge_item_id,final_sha256').eq('id', id).single(), 'Owner cannot see signing result');
   const item = data(await a.client.from('knowledge_items').select('file_path,shared_with_team').eq('id', request.final_knowledge_item_id).single(), 'Owner cannot see archived file');
   const blob = data(await a.client.storage.from(bucket).download(signedPath), 'Owner cannot download archived PDF');
