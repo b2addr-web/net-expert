@@ -1,4 +1,7 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
+import { once } from 'node:events';
+import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID, createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument } from 'pdf-lib';
@@ -7,6 +10,7 @@ import { processStagingFixtureJob } from './staging-mock-worker.mjs';
 import { requestPreview } from './staging-preview-http.mjs';
 
 const preview = process.env.NETEXPERT_STAGING_PREVIEW;
+const loopback = process.argv.includes('--staging-loopback');
 const bucket = 'knowledge-files';
 const run = randomUUID();
 const users = [], orgs = [], paths = new Set();
@@ -17,15 +21,66 @@ const data = (r, reason) => { check(!r.error, reason); return r.data; };
 const cli = (command, input) => spawnSync('cmd.exe', ['/d', '/s', '/c', command], {
   input, encoding: 'utf8', windowsHide: true, timeout: 40000,
 });
-const api = (path, options) => requestPreview(fetch, preview, process.env.VERCEL_AUTOMATION_BYPASS_SECRET, path, options);
+let localOrigin, localApp;
+async function startLocalApp(anon, service) {
+  const listener = createServer();
+  listener.listen(0, '127.0.0.1');
+  await once(listener, 'listening');
+  const port = listener.address().port;
+  await new Promise(resolve => listener.close(resolve));
+  localOrigin = `http://127.0.0.1:${port}`;
+  localApp = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--hostname', '127.0.0.1', '--port', String(port)], {
+    windowsHide: true, stdio: 'ignore',
+    env: {
+      ...process.env, SUPABASE_URL: supabase, NEXT_PUBLIC_SUPABASE_URL: supabase,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: anon, NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
+      SUPABASE_SERVICE_ROLE_KEY: service, NEXT_PUBLIC_SITE_URL: localOrigin,
+      WHATSAPP_PROVIDER: 'mock', WHATSAPP_WORKER_SECRET: '', RESEND_API_KEY: '',
+    },
+  });
+  for (let i = 0; i < 40 && localApp.exitCode === null; i++) {
+    try {
+      const response = await fetch(localOrigin + '/', { redirect: 'manual', signal: AbortSignal.timeout(2500) });
+      if (response.ok && (await response.text()).includes('__NEXT_DATA__')) return;
+    } catch { /* Wait for the isolated local server to start. */ }
+    await delay(500);
+  }
+  throw new Error('Local Next server did not start');
+}
+
+async function api(path, { token, body, post = false } = {}) {
+  if (!loopback) return requestPreview(fetch, preview, process.env.VERCEL_AUTOMATION_BYPASS_SECRET, path, { token, body, post });
+  check(localOrigin && /^\/(?:api|sign)\/[A-Za-z0-9_/-]+$/.test(path), 'Invalid local app route');
+  const headers = {};
+  if (token) headers.Authorization = 'Bearer ' + token;
+  if (body) headers['Content-Type'] = 'application/json';
+  const response = await fetch(localOrigin + path, {
+    method: post ? 'POST' : 'GET', headers, redirect: 'manual',
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(40000),
+  });
+  const raw = await response.text();
+  let json;
+  try { json = JSON.parse(raw); } catch { /* Signing page returns HTML. */ }
+  return { status: response.status, json, page: raw.includes('__NEXT_DATA__') };
+}
 
 let db, passed = false, cleanupErrors = 0, stage = 'preflight';
 try {
-  check(/^https:\/\/net-expert-[a-z0-9]+-b2addr-9372s-projects\.vercel\.app$/.test(preview ?? ''), 'Set the exact NetExpert Preview URL');
-  const unauthorized = await api('/api/internal/whatsapp/worker', { post: true });
-  check(unauthorized.status === 401 && unauthorized.json?.error === 'WORKER_UNAUTHORIZED', 'Protected Preview POST or Worker authorization check failed');
-  const { anon, service } = loadStagingKeys(process.env, cli);
+  const preflight = await Promise.allSettled([
+    Promise.resolve().then(() => loadStagingKeys(process.env, cli)),
+    loopback ? Promise.resolve() : api('/api/internal/whatsapp/worker', { post: true }).then(response => {
+      check(response.status === 401 && response.json?.error === 'WORKER_UNAUTHORIZED', 'Protected Preview POST or Worker authorization check failed');
+    }),
+  ]);
+  for (const result of preflight) if (result.status === 'rejected') console.error('Preflight: ' + result.reason.message);
+  check(preflight.every(result => result.status === 'fulfilled'), 'Preflight prerequisites unavailable');
+  const { anon, service } = preflight[0].value;
   db = createClient(supabase, service, { auth });
+  if (loopback) {
+    await startLocalApp(anon, service);
+    const response = await api('/api/internal/whatsapp/worker', { post: true });
+    check(response.status === 401 && response.json?.error === 'WORKER_UNAUTHORIZED', 'Local Worker endpoint did not reject missing authentication');
+  }
 
   stage = 'fixture and tenant isolation';
   const fixture = async tag => {
@@ -118,7 +173,13 @@ try {
     }
     for (const id of users) await clean(() => db.auth.admin.deleteUser(id));
   }
+  if (localApp?.pid && localApp.exitCode === null) {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(localApp.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+    else localApp.kill();
+  }
 }
 if (cleanupErrors) console.error(`FAIL fixture cleanup: ${cleanupErrors} operations`);
-console.log(passed && !cleanupErrors ? 'PREVIEW SIGNING AND SCOPED MOCK PASSED' : 'STAGING E2E INCOMPLETE');
+console.log(passed && !cleanupErrors
+  ? (loopback ? 'HOSTED STAGING SIGNING AND SCOPED MOCK PASSED VIA LOCAL APP' : 'PREVIEW SIGNING AND SCOPED MOCK PASSED')
+  : 'STAGING E2E INCOMPLETE');
 process.exitCode = passed && !cleanupErrors ? 0 : 1;
