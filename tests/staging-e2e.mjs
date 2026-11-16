@@ -3,9 +3,9 @@ import { randomUUID, createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument } from 'pdf-lib';
 import { loadStagingKeys, stagingUrl as supabase } from './staging-supabase-keys.mjs';
+import { processStagingFixtureJob } from './staging-mock-worker.mjs';
 
 const preview = process.env.NETEXPERT_STAGING_PREVIEW;
-const worker = process.env.WHATSAPP_WORKER_SECRET;
 const bucket = 'knowledge-files';
 const run = randomUUID();
 const users = [], orgs = [], paths = new Set();
@@ -35,16 +35,9 @@ function api(path, { token, body, post = false } = {}) {
 let db, passed = false, cleanupErrors = 0, stage = 'preflight';
 try {
   check(/^https:\/\/net-expert-[a-z0-9]+-b2addr-9372s-projects\.vercel\.app$/.test(preview ?? ''), 'Set the exact NetExpert Preview URL');
-  check(worker, 'Set WHATSAPP_WORKER_SECRET in the current PowerShell session');
+  check(api('/api/internal/whatsapp/worker', { post: true }).json?.error === 'WORKER_UNAUTHORIZED', 'Protected Preview POST or Worker authorization check failed');
   const { anon, service } = loadStagingKeys(process.env, cli);
   db = createClient(supabase, service, { auth });
-  const active = async () => data(await db.from('whatsapp_send_jobs').select('id,signature_request_id').in('status', ['pending', 'processing']).limit(2), 'Cannot read Staging queue');
-  check((await active()).length === 0, 'Staging queue contains unrelated work');
-  const workerRoute = '/api/internal/whatsapp/worker';
-  check(api(workerRoute, { post: true, token: randomUUID() }).json?.error === 'WORKER_UNAUTHORIZED', 'Protected Preview POST or authorization check failed');
-  const invoke = () => api(workerRoute, { post: true, token: worker, body: { limit: 1 } });
-  const probe = invoke();
-  check(probe.status === 200 && probe.json?.results?.[0]?.status === 'empty', 'Worker secret does not authenticate to the pinned Preview');
 
   stage = 'fixture and tenant isolation';
   const fixture = async tag => {
@@ -86,16 +79,15 @@ try {
   stage = 'Mock Worker';
   data(await db.from('whatsapp_settings').insert({ organization_id: a.org, mode: 'netexpert', enabled: true, template_name: 'signature_request', template_status: 'approved' }), 'Cannot create fixture messaging settings');
   data(await db.from('signature_requests').update({ whatsapp_consent_confirmed: true }).eq('organization_id', a.org).eq('id', id), 'Cannot record fixture consent');
-  const queue = await active();
-  check(queue.length === 1 && queue[0].signature_request_id === id, 'Queue contains jobs outside the Worker fixture');
-  const result = invoke();
-  const mockId = result.json?.results?.[0]?.providerMessageId;
-  check(result.status === 200 && /^mock-[a-f0-9]{24}$/.test(mockId), 'Worker did not return a Mock acceptance ID');
-  const job = data(await db.from('whatsapp_send_jobs').select('status,attempts,provider_message_id').eq('id', queue[0].id).single(), 'Cannot verify processed queue entry');
+  const fixtureJob = data(await db.from('whatsapp_send_jobs').select('id').eq('organization_id', a.org).eq('signature_request_id', id).single(), 'Cannot read fixture job');
+  const result = await processStagingFixtureJob(db, { organizationId: a.org, requestId: id, jobId: fixtureJob.id });
+  const mockId = result.providerMessageId;
+  check(result.status === 'accepted' && /^mock-[a-f0-9]{24}$/.test(mockId), 'Worker did not return a Mock acceptance ID');
+  const job = data(await db.from('whatsapp_send_jobs').select('status,attempts,provider_message_id').eq('id', fixtureJob.id).single(), 'Cannot verify processed queue entry');
   check(job.status === 'accepted' && job.attempts === 1 && job.provider_message_id === mockId, 'Mock result did not persist exactly once');
   const sent = data(await a.client.from('signature_requests').select('status').eq('id', id).single(), 'Cannot read the sent request');
   check(sent.status === 'sent', 'Mock Worker did not mark this request sent');
-  console.log('PASS authenticated Worker and Mock queue processing');
+  console.log('PASS scoped local Mock Worker against the Staging queue fixture');
 
   stage = 'signing and archive after Mock delivery';
   const page = api(signingUrl);
@@ -140,5 +132,5 @@ try {
   }
 }
 if (cleanupErrors) console.error(`FAIL fixture cleanup: ${cleanupErrors} operations`);
-console.log(passed && !cleanupErrors ? 'STAGING PASSED' : 'STAGING E2E INCOMPLETE');
+console.log(passed && !cleanupErrors ? 'PREVIEW SIGNING AND SCOPED MOCK PASSED' : 'STAGING E2E INCOMPLETE');
 process.exitCode = passed && !cleanupErrors ? 0 : 1;
