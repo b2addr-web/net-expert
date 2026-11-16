@@ -14,6 +14,7 @@ const loopback = process.argv.includes('--staging-loopback');
 const bucket = 'knowledge-files';
 const run = randomUUID();
 const users = [], orgs = [], paths = new Set();
+const globalTemplates = [];
 const auth = { persistSession: false, autoRefreshToken: false };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const check = (ok, reason) => { if (!ok) throw new Error(reason); };
@@ -22,6 +23,7 @@ const cli = (command, input) => spawnSync('cmd.exe', ['/d', '/s', '/c', command]
   input, encoding: 'utf8', windowsHide: true, timeout: 40000,
 });
 let localOrigin, localApp;
+let localWorkerCredential;
 async function startLocalApp(anon, service) {
   const listener = createServer();
   listener.listen(0, '127.0.0.1');
@@ -29,13 +31,14 @@ async function startLocalApp(anon, service) {
   const port = listener.address().port;
   await new Promise(resolve => listener.close(resolve));
   localOrigin = `http://127.0.0.1:${port}`;
+  localWorkerCredential = randomUUID();
   localApp = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '--hostname', '127.0.0.1', '--port', String(port)], {
     windowsHide: true, stdio: 'ignore',
     env: {
       ...process.env, SUPABASE_URL: supabase, NEXT_PUBLIC_SUPABASE_URL: supabase,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: anon, NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
       SUPABASE_SERVICE_ROLE_KEY: service, NEXT_PUBLIC_SITE_URL: localOrigin,
-      WHATSAPP_PROVIDER: 'mock', WHATSAPP_WORKER_SECRET: '', RESEND_API_KEY: '',
+      VERCEL_ENV: 'preview', WHATSAPP_PROVIDER: 'mock', WHATSAPP_WORKER_SECRET: localWorkerCredential, RESEND_API_KEY: '',
     },
   });
   for (let i = 0; i < 40 && localApp.exitCode === null; i++) {
@@ -50,7 +53,7 @@ async function startLocalApp(anon, service) {
 
 async function api(path, { token, body, post = false } = {}) {
   if (!loopback) return requestPreview(fetch, preview, process.env.VERCEL_AUTOMATION_BYPASS_SECRET, path, { token, body, post });
-  check(localOrigin && /^\/(?:api|sign)\/[A-Za-z0-9_/-]+$/.test(path), 'Invalid local app route');
+  check(localOrigin && /^\/(?:api|sign)\/[A-Za-z0-9_/-]+(?:\?probe=auth)?$/.test(path), 'Invalid local app route');
   const headers = {};
   if (token) headers.Authorization = 'Bearer ' + token;
   if (body) headers['Content-Type'] = 'application/json';
@@ -80,6 +83,8 @@ try {
     await startLocalApp(anon, service);
     const response = await api('/api/internal/whatsapp/worker', { post: true });
     check(response.status === 401 && response.json?.error === 'WORKER_UNAUTHORIZED', 'Local Worker endpoint did not reject missing authentication');
+    const probe = await api('/api/internal/whatsapp/worker?probe=auth', { post: true, token: localWorkerCredential });
+    check(probe.status === 200 && probe.json?.authenticated === true && probe.json?.processed === 0, 'Authentication probe did not return without processing jobs');
   }
 
   stage = 'fixture and tenant isolation';
@@ -117,6 +122,52 @@ try {
   const created = await create(a.token);
   check(created.status === 201 && /^\/sign\/[A-Za-z0-9_-]{40,}$/.test(created.json?.signingUrl), 'Preview request creation failed');
   const { id, signingUrl } = created.json;
+  stage = 'negative permissions';
+  const forged = await a.client.from('signature_requests').update({
+    status: 'completed', final_sha256: 'f'.repeat(64), consent_text: 'Forged consent',
+  }).eq('id', id);
+  check(forged.error?.code === '42501', 'Company administrator can forge signature evidence');
+  const directInsert = await a.client.from('signature_requests').insert({
+    organization_id: a.org, template_id: template.id, created_by: a.id, status: 'completed',
+    employee_name: 'Invalid fixture', phone_e164: '+12025550101',
+    token_hash: sha(randomUUID()), token_expires_at: new Date(Date.now() + 3600000).toISOString(),
+  });
+  check(directInsert.error?.code === '42501', 'Company administrator can insert a completed request');
+  const changedTemplate = await a.client.from('signature_templates').update({ signature_x: 30 }).eq('id', template.id);
+  const removedTemplate = await a.client.from('signature_templates').delete().eq('id', template.id);
+  check(changedTemplate.error?.code === '23514' && removedTemplate.error?.code === '23514', 'Used template can be changed or removed');
+  await a.client.storage.from(bucket).remove([source]);
+  data(await a.client.storage.from(bucket).download(source), 'Registered template original was deleted');
+  const globalTemplate = data(await db.from('whatsapp_message_templates').insert({
+    name: run, provider_template_name: 'fixture', created_by: b.id,
+  }).select('id').single(), 'Platform could not create the global template fixture');
+  globalTemplates.push(globalTemplate.id);
+  check(data(await a.client.from('whatsapp_message_templates').select('id').eq('id', globalTemplate.id), 'Cannot read global template').length === 1, 'Global template visibility changed');
+  const globalInsert = await a.client.from('whatsapp_message_templates').insert({
+    name: 'attempt-' + run, provider_template_name: 'fixture', created_by: a.id,
+  });
+  check(globalInsert.error?.code === '42501', 'Company administrator can create a global template');
+  const globalUpdate = data(await a.client.from('whatsapp_message_templates').update({ name: 'changed-' + run }).eq('id', globalTemplate.id).select('id'), 'Cannot verify global template update');
+  const globalDelete = data(await a.client.from('whatsapp_message_templates').delete().eq('id', globalTemplate.id).select('id'), 'Cannot verify global template deletion');
+  check(globalUpdate.length === 0 && globalDelete.length === 0, 'Company administrator can modify a global template');
+  data(await db.from('member_permissions').insert([
+    { organization_id: b.org, user_id: b.id, section: 'signatures', allowed: true },
+    { organization_id: b.org, user_id: b.id, section: 'whatsapp', allowed: true },
+  ]), 'Cannot seed explicit test permissions');
+  for (const role of ['manager', 'operator', 'viewer']) {
+    data(await db.from('organization_members').update({ role }).eq('organization_id', b.org).eq('user_id', b.id), 'Cannot set fixture role');
+    const access = data(await b.client.rpc('get_my_access'), 'Cannot verify fixture role');
+    check(access.role === role && access.permissions.signatures && access.permissions.whatsapp, 'Fixture role or permissions were not applied');
+    const write = await b.client.from('signature_requests').update({ status: 'completed' }).eq('id', id);
+    check(write.error?.code === '42501', 'A non-admin role can write protected verification state');
+    check(data(await b.client.from('signature_requests').select('id').eq('id', id), 'Cannot verify tenant filtering').length === 0, 'Another company can read the request');
+    check(data(await b.client.from('whatsapp_message_templates').delete().eq('id', globalTemplate.id).select('id'), 'Cannot verify global template permissions').length === 0, 'A non-admin role can delete a global template');
+    const own = await b.client.from('whatsapp_message_templates').insert({
+      organization_id: b.org, name: role + '-' + run, provider_template_name: 'fixture', created_by: b.id,
+    });
+    check(role === 'viewer' ? own.error?.code === '42501' : !own.error, 'Company WhatsApp template privileges changed unexpectedly');
+  }
+  console.log('PASS direct evidence writes, original template and global template protections');
   const signedPath = `${a.org}/signature-requests/${id}/signed.pdf`;
   paths.add(signedPath);
   stage = 'Mock Worker';
@@ -139,6 +190,7 @@ try {
   const opened = await api(route);
   check(opened.status === 200 && opened.json?.requestId === id && opened.json.status === 'awaiting_signature' && new URL(opened.json.template.url).origin === supabase, 'Signing document did not come from Staging');
   const body = { signatureData: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', consent: 'Staging E2E test consent' };
+  check((await api(route + '/sign', { post: true, body: { ...body, signatureData: 'data:image/png;base64,YWJj' } })).status === 400, 'Invalid signature image was accepted');
   const signed = await api(route + '/sign', { post: true, body });
   check(signed.status === 200 && signed.json?.status === 'completed', 'Signing or PDF archive failed');
   check((await api(route + '/sign', { post: true, body })).status === 409, 'Duplicate signing was not rejected');
@@ -150,6 +202,8 @@ try {
     && sha(bytes) !== sha(pdf) && (await PDFDocument.load(bytes)).getPageCount() === 2, 'Archived PDF integrity or privacy check failed');
   check(data(await b.client.from('knowledge_items').select('id').eq('id', request.final_knowledge_item_id), 'Cannot check archive RLS').length === 0
     && !!(await b.client.storage.from(bucket).download(signedPath)).error, 'Cross-company archive access was not denied');
+  const removedArchive = await a.client.from('knowledge_items').delete().eq('id', request.final_knowledge_item_id);
+  check(removedArchive.error?.code === '23514', 'Completed archive can be removed by its owner');
   console.log('PASS signing, PDF archive and company isolation');
 
   passed = true;
@@ -167,6 +221,7 @@ try {
       });
     }
     if (paths.size) await clean(() => db.storage.from(bucket).remove([...paths]));
+    for (const id of globalTemplates) await clean(() => db.from('whatsapp_message_templates').delete().eq('id', id));
     for (const org of orgs) {
       await clean(() => db.from('signature_requests').delete().eq('organization_id', org));
       await clean(() => db.from('organizations').delete().eq('id', org));
