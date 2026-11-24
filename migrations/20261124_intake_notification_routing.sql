@@ -2,7 +2,7 @@ begin;
 
 create table public.intake_notification_settings (
  organization_id uuid primary key references public.organizations(id) on delete cascade,
- enabled boolean not null default true,
+ enabled boolean not null default false,
  email_enabled boolean not null default true,
  bell_enabled boolean not null default true,
  default_recipient uuid,
@@ -66,6 +66,7 @@ revoke all on public.intake_notification_settings,public.intake_categories,publi
  public.intake_notifications from public,anon,authenticated;
 grant select,insert,update on public.intake_notification_settings,public.intake_categories,
  public.intake_routing_audit,public.intake_notifications to service_role;
+grant select (organization_id,user_id,section,allowed) on public.member_permissions to service_role;
 
 create function public.intake_eligible(p_org uuid,p_kind text,p_write boolean default false)
 returns table(user_id uuid,role text) language sql stable security invoker set search_path=public as $$
@@ -121,7 +122,7 @@ declare
 begin
  select * into v_settings from intake_notification_settings where organization_id=new.organization_id;
  if not found then
-  v_settings.enabled:=true; v_settings.email_enabled:=true; v_settings.bell_enabled:=true;
+  v_settings.enabled:=false; v_settings.email_enabled:=true; v_settings.bell_enabled:=true;
  end if;
  if new.kind='report' then
   select array(select e.user_id from intake_eligible(new.organization_id,new.kind) e where e.user_id=any(c.recipients))
@@ -130,12 +131,12 @@ begin
    select array(select e.user_id from intake_eligible(new.organization_id,new.kind) e where e.user_id=v_settings.default_recipient)
     into v_candidates;
   end if;
-  if cardinality(v_candidates)=0 then
-   select array(select e.user_id from intake_eligible(new.organization_id,new.kind) e where e.role='company_admin') into v_candidates;
-  end if;
  else
   select array(select e.user_id from intake_eligible(new.organization_id,new.kind) e where e.user_id=any(v_settings.device_recipients))
    into v_candidates;
+ end if;
+ if coalesce(cardinality(v_candidates),0)=0 and v_settings.enabled then
+  select array(select e.user_id from intake_eligible(new.organization_id,new.kind) e where e.role='company_admin') into v_candidates;
  end if;
  v_recipients:=coalesce(v_candidates,'{}');
  if not v_settings.enabled or not (v_settings.bell_enabled or v_settings.email_enabled) or cardinality(v_recipients)=0 then
@@ -187,7 +188,7 @@ begin
  insert into intake_routing_audit(organization_id,case_id,actor_id,action,details)
  values(p_org,p_case,p_actor,'assigned',jsonb_build_object('from',v_case.assignee_id,'to',p_recipient)) returning id into v_event;
  select * into v_settings from intake_notification_settings where organization_id=p_org;
- if p_recipient is not null and coalesce(v_settings.enabled,true)
+ if p_recipient is not null and coalesce(v_settings.enabled,false)
  and (coalesce(v_settings.bell_enabled,true) or coalesce(v_settings.email_enabled,true)) then
   insert into intake_notifications(organization_id,case_id,recipient_id,event_key,show_in_bell,email_status)
    values(p_org,p_case,p_recipient,v_event::text,coalesce(v_settings.bell_enabled,true),

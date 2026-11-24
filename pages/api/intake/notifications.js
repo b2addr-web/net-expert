@@ -1,5 +1,5 @@
 import {adminContext,canReadIntake,serverClient} from '../../../lib/intake-server';
-import {intakeCaseLink,intakeNotificationTitle} from '../../../lib/intake-notifications';
+import {intakeCaseLink} from '../../../lib/intake-notifications';
 
 export default async function handler(req,res) {
  res.setHeader('Cache-Control','no-store');
@@ -13,7 +13,7 @@ export default async function handler(req,res) {
   const scope=query=>query.eq('organization_id',org).eq('recipient_id',user).eq('show_in_bell',true);
   const settings=await db.from('intake_notification_settings').select('enabled,bell_enabled').eq('organization_id',org).maybeSingle();
   if(settings.error)throw settings.error;
-  if(settings.data&&(!settings.data.enabled||!settings.data.bell_enabled))return res.json({rows:[],unread:0});
+  if(!settings.data?.enabled||!settings.data.bell_enabled)return res.json({rows:[],unread:0});
   if(req.method==='PATCH'){
    const {id,all}=req.body||{};
    if(all!==true&&(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id)))return res.status(400).json({error:'INVALID_FIELDS'});

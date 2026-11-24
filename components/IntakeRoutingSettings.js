@@ -3,7 +3,7 @@ import {intakeRequest} from '../lib/intake-client';
 
 const suggestions=['الشبكات والإنترنت','أجهزة الكمبيوتر واللابتوب','الطابعات','البريد الإلكتروني','الأنظمة والبرامج','الهواتف والاتصالات','الأجهزة التقنية الأخرى','أخرى'];
 const emptyCategory={id:null,name:'',active:true,recipients:[]};
-const defaults={enabled:true,email_enabled:true,bell_enabled:true,default_recipient:null,device_recipients:[]};
+const defaults={enabled:false,email_enabled:true,bell_enabled:true,default_recipient:null,device_recipients:[]};
 
 function Recipients({label,members,selected,onChange}) {
  const visible=new Set(members.map(member=>member.id));

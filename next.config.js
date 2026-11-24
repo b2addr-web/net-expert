@@ -2,12 +2,18 @@
 const scriptSource = process.env.NODE_ENV === 'development'
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
   : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'";
-const isolated = process.env.VERCEL_ENV === 'preview' || process.env.NEXT_PUBLIC_INTAKE_ISOLATED === '1';
-const stageOrigin = 'https://bsxhmijczvsyidbgptfz.supabase.co';
-if (isolated && process.env.NEXT_PUBLIC_SUPABASE_URL !== stageOrigin) {
+const productionOrigin = 'https://uycntpxrfbqtxydhsbbi.supabase.co';
+const production = process.env.VERCEL_ENV === 'production';
+const isolated = !production && (process.env.VERCEL_ENV === 'preview' || process.env.NEXT_PUBLIC_INTAKE_ISOLATED === '1');
+const previewRef = process.env.INTAKE_PREVIEW_SUPABASE_REF;
+const previewOrigin = /^[a-z]{20}$/.test(previewRef || '') ? 'https://' + previewRef + '.supabase.co' : null;
+if (isolated && (!previewOrigin || previewOrigin === productionOrigin || process.env.NEXT_PUBLIC_SUPABASE_URL !== previewOrigin)) {
   throw new Error('Intake Preview requires the isolated NetExpert staging database URL.');
 }
-const databaseOrigin = isolated ? stageOrigin : 'https://uycntpxrfbqtxydhsbbi.supabase.co';
+if (production && process.env.NEXT_PUBLIC_SUPABASE_URL !== productionOrigin) {
+  throw new Error('The production build requires the NetExpert production database URL.');
+}
+const databaseOrigin = isolated ? previewOrigin : productionOrigin;
 const contentSecurityPolicy = [
   "default-src 'self'",
   scriptSource,

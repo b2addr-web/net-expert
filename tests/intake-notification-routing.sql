@@ -14,6 +14,12 @@ begin
  insert into organization_members(organization_id,user_id,role,status) values
  (org_a,manager_a,'company_admin','active'),(org_a,specialist,'operator','active'),(org_b,outsider,'company_admin','active');
  insert into member_permissions(organization_id,user_id,section,allowed) values(org_a,specialist,'report',true);
+ insert into intake_cases(organization_id,kind,reference,employee_name,employee_number,email,department,description,status)
+ values(org_b,'device_request',gen_random_uuid()::text,'Fixture','0','employee@fixture.invalid','IT','Opt-in fixture','جديد') returning id into skipped;
+ if exists(select 1 from intake_notifications where case_id=skipped) or
+  not exists(select 1 from intake_routing_audit where case_id=skipped and details->>'reason'='NOTIFICATIONS_DISABLED')
+ then raise exception 'Notifications must be disabled before company opt-in'; end if;
+ perform intake_save_routing(org_b,outsider,'settings',jsonb_build_object('enabled',true,'email_enabled',true,'bell_enabled',true,'recipients','[]'::jsonb));
  perform intake_save_routing(org_a,manager_a,'category',jsonb_build_object('name','الشبكات','active',true,'recipients',array[specialist,specialist,manager_a]));
  select id into category from intake_categories where organization_id=org_a;
  perform intake_save_routing(org_a,manager_a,'settings',jsonb_build_object('enabled',true,'email_enabled',true,'bell_enabled',true,'default_recipient',specialist,'recipients',array[manager_a]));
@@ -29,7 +35,9 @@ begin
  insert into intake_cases(organization_id,kind,reference,employee_name,employee_number,email,department,description,status)
  values(org_a,'device_request',gen_random_uuid()::text,'Fixture','2','employee@fixture.invalid','IT','Fixture','جديد') returning id into device;
  if (select array_agg(recipient_id) from intake_notifications where case_id=device)<>array[manager_a] then raise exception 'Device settings not independent'; end if;
-
+ insert into intake_cases(organization_id,kind,reference,employee_name,employee_number,email,department,description,status)
+ values(org_b,'device_request',gen_random_uuid()::text,'Fixture','2','employee@fixture.invalid','IT','Fixture','جديد') returning id into device;
+ if (select array_agg(recipient_id) from intake_notifications where case_id=device)<>array[outsider] then raise exception 'Device admin fallback failed'; end if;
  insert into intake_cases(organization_id,kind,reference,employee_name,employee_number,email,department,description,status)
  values(org_a,'report',gen_random_uuid()::text,'Fixture','3','employee@fixture.invalid','IT','Fixture','جديد') returning id into fallback;
  if (select array_agg(recipient_id) from intake_notifications where case_id=fallback)<>array[specialist] then raise exception 'Default fallback failed'; end if;
@@ -58,7 +66,12 @@ begin
  if exists(select 1 from intake_notifications where organization_id=org_a and recipient_id=manager_a and read_at is null) then raise exception 'Mark all failed'; end if;
  if (select count(*) from intake_claim_email(org_a,case_a))<>4 or exists(select 1 from intake_claim_email(org_a,case_a)) then raise exception 'Email claim dedupe failed'; end if;
 
- update member_permissions set allowed=false where organization_id=org_a and user_id=specialist and section='report';
+ insert into member_permissions(organization_id,user_id,section,allowed) values(org_a,specialist,'device_request',true);
+ perform intake_save_routing(org_a,manager_a,'settings',jsonb_build_object('enabled',true,'email_enabled',true,'bell_enabled',true,'default_recipient',specialist,'recipients',array[specialist]));
+ update member_permissions set allowed=false where organization_id=org_a and user_id=specialist and section in ('report','device_request');
+ insert into intake_cases(organization_id,kind,reference,employee_name,employee_number,email,department,description,status)
+ values(org_a,'device_request',gen_random_uuid()::text,'Fixture','7','employee@fixture.invalid','IT','Fixture','جديد') returning id into device;
+ if (select array_agg(recipient_id) from intake_notifications where case_id=device)<>array[manager_a] then raise exception 'Device fallback after permission loss failed'; end if;
  if exists(select 1 from intake_eligible(org_a,'report') where user_id=specialist) then raise exception 'Revoked member remained eligible'; end if;
  update organization_members set status='suspended' where organization_id=org_a and user_id=manager_a;
  insert into intake_cases(organization_id,kind,reference,employee_name,employee_number,email,department,description,status)
