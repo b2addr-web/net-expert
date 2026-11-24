@@ -24,9 +24,13 @@ export async function getServerSideProps({params,res}){
    if(error||!data)return {props:{initialLink:null}};
    linkId=data.link_id;
   }
-  const lookup=db.from('intake_links').select('kind,label').eq('active',true);
+  const lookup=db.from('intake_links').select('kind,label,organization_id').eq('active',true);
   const {data,error}=await (shortCode?lookup.eq('id',linkId):lookup.eq('token_hash',tokenHash(token))).maybeSingle();
-  return {props:{initialLink:error||!data?null:{kind:data.kind,label:data.label}}};
+  if(error||!data)return {props:{initialLink:null}};
+  const categories=data.kind==='report'?await db.from('intake_categories').select('id,name')
+   .eq('organization_id',data.organization_id).eq('active',true).order('name'):{data:[]};
+  if(categories.error)throw categories.error;
+  return {props:{initialLink:{kind:data.kind,label:data.label,categories:categories.data}}};
  }catch{return {props:{initialLink:null}};}
 }
 
@@ -49,7 +53,9 @@ export default function IntakeForm({initialLink=null}){
     <h1>{report?t.reportHeading:t.requestHeading}</h1><p className="intake-subtitle">{lang==='ar'?link.label:(report?t.reportCategory:t.requestCategory)} · {t.subtitle}</p>
     <form onSubmit={submit}><div className="intake-fields">
      {field('employee_name',t.employeeName)}{field('employee_number',t.employeeNumber)}{field('email',t.email,'email')}{field('department',t.department)}
-     {report?<label>{t.issueType}<select required value={form.issue_type} onChange={e=>set('issue_type',e.target.value)}><option value="">{t.chooseIssue}</option>{issueTypes.map(([value,english])=><option key={value} value={value}>{lang==='ar'?value:english}</option>)}</select></label>:<label>{t.deviceType}<select required value={form.device_type} onChange={e=>set('device_type',e.target.value)}><option value="">{t.chooseDevice}</option>{deviceTypes.map(([value,english])=><option key={value} value={value}>{lang==='ar'?value:english}</option>)}</select></label>}
+     {report?<label>{t.issueType}<select required value={form.issue_type} onChange={e=>set('issue_type',e.target.value)}><option value="">{t.chooseIssue}</option>{link.categories?.length
+      ? <>{link.categories.map(({id,name})=><option key={id} value={id}>{name}</option>)}<option value="أخرى">{lang==='ar'?'أخرى (غير مصنفة)':'Other (uncategorized)'}</option></>
+      : issueTypes.map(([value,english])=><option key={value} value={value}>{lang==='ar'?value:english}</option>)}</select></label>:<label>{t.deviceType}<select required value={form.device_type} onChange={e=>set('device_type',e.target.value)}><option value="">{t.chooseDevice}</option>{deviceTypes.map(([value,english])=><option key={value} value={value}>{lang==='ar'?value:english}</option>)}</select></label>}
      <label className="wide">{report?t.reportDescription:t.requestDescription}<textarea required minLength={10} maxLength={3000} rows={5} value={form.description} onChange={e=>set('description',e.target.value)}/></label>
      {report&&<label className="wide">{t.image}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={chooseImage}/><small>{t.imageLimit}</small></label>}
     </div><input className="intake-honeypot" tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.website} onChange={e=>set('website',e.target.value)}/>{error&&<p role="alert" className="intake-error">{t[error]||t.submitError}</p>}<button disabled={sending}>{sending?t.sending:(report?t.sendReport:t.sendRequest)}</button></form>

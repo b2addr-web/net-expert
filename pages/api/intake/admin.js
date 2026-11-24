@@ -1,6 +1,8 @@
 import {adminContext,canReadIntake,canWriteIntake,serverClient,newToken,newShortCode,tokenHash,sealToken,openToken,REPORT_STATUSES,REQUEST_STATUSES,sendCaseEmail,validText} from '../../../lib/intake-server';
 
-const publicOrigin=()=>new URL(process.env.NEXT_PUBLIC_SITE_URL).origin.replace(/^https:\/\/www\./,'https://');
+const siteUrl=()=>process.env.VERCEL_ENV==='preview'&&process.env.VERCEL_URL
+ ? 'https://'+process.env.VERCEL_URL : process.env.NEXT_PUBLIC_SITE_URL;
+const publicOrigin=()=>new URL(siteUrl()).origin.replace(/^https:\/\/www\./,'https://');
 const shortUrl=code=>`${publicOrigin()}/i/${code}`;
 
 export default async function handler(req,res){
@@ -14,7 +16,7 @@ export default async function handler(req,res){
    if(!canReadIntake(admin,kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
    const [{data:links,error:linksError},{data:cases,error:casesError}]=await Promise.all([
     db.from('intake_links').select('id,kind,label,active,created_at,token_encrypted').eq('organization_id',org).eq('kind',kind).order('created_at',{ascending:false}),
-    db.from('intake_cases').select('id,reference,kind,employee_name,employee_number,email,department,issue_type,device_type,description,status,attachment_path,created_at,updated_at').eq('organization_id',org).eq('kind',kind).order('created_at',{ascending:false}).limit(1000)
+    db.from('intake_cases').select('id,reference,kind,employee_name,employee_number,email,department,issue_type,device_type,description,status,attachment_path,created_at,updated_at,category_id,assignee_id').eq('organization_id',org).eq('kind',kind).order('created_at',{ascending:false}).limit(1000)
    ]);
    if(linksError||casesError)throw linksError||casesError;
    const {data:existingAliases,error:aliasError}=links.length?await db.from('intake_link_aliases').select('link_id,code_encrypted').in('link_id',links.map(link=>link.id)):{data:[],error:null};
@@ -55,7 +57,7 @@ export default async function handler(req,res){
     if(!['report','device_request'].includes(body.kind)||!validText(body.label,100))return res.status(400).json({error:'INVALID_FIELDS'});
     if(!canWriteIntake(admin,body.kind))return res.status(403).json({error:'NOT_AUTHORIZED'});
     const token=newToken(),code=newShortCode();
-    if(!process.env.NEXT_PUBLIC_SITE_URL)return res.status(503).json({error:'SITE_URL_NOT_CONFIGURED'});
+    if(!siteUrl())return res.status(503).json({error:'SITE_URL_NOT_CONFIGURED'});
     const {data,error}=await db.from('intake_links').insert({organization_id:org,kind:body.kind,label:body.label.trim(),token_hash:tokenHash(token),token_encrypted:sealToken(token),created_by:admin.user.id}).select('id,kind,label,active,created_at').single();
     if(error)throw error;
     const {error:aliasError}=await db.from('intake_link_aliases').insert({link_id:data.id,code_hash:tokenHash(code),code_encrypted:sealToken(code)});

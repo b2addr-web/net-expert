@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {supabase} from '../lib/supabase';
+import {intakeRequest} from '../lib/intake-client';
 import {NavIcon} from './WorkspaceSidebar';
 
 // Keep the stored Arabic status values unchanged; translate only their presentation.
@@ -31,7 +31,7 @@ const linkHeadings={
 };
 const statusTone=value=>['مغلق','تم الحل','تم التسليم','تمت الموافقة'].includes(value)?'success':value==='مرفوض'?'danger':value==='جديد'?'info':'warning';
 
-export default function IntakeDashboard({kind,user,ar}){
+export default function IntakeDashboard({kind,user,ar,caseId,onCloseCase}){
  const tr=value=>ar?value:english[value]||value;
  const locale=ar?'ar-SA':'en-US';
  const formatDate=value=>new Date(value).toLocaleDateString(locale);
@@ -40,15 +40,31 @@ export default function IntakeDashboard({kind,user,ar}){
  const [data,setData]=useState({links:[],cases:[]}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[label,setLabel]=useState('');
  const [selected,setSelected]=useState(null),[detail,setDetail]=useState(null),[note,setNote]=useState('');
  const [query,setQuery]=useState(''),[status,setStatus]=useState(''),[department,setDepartment]=useState(''),[from,setFrom]=useState(''),[to,setTo]=useState('');
- const api=async(method,path,body)=>{
-  const {data:session}=await supabase.auth.getSession();
-  const response=await fetch('/api/intake/'+path,{method,headers:{Authorization:`Bearer ${session.session?.access_token||''}`,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
-  const value=await response.json();
-  if(!response.ok)throw new Error(value.error||'تعذر إكمال العملية');
-  return value;
- };
+ const api=(method,path,body)=>intakeRequest(path,method,body);
+ const [routing,setRouting]=useState({categories:[],reportMembers:[]});
+ const [category,setCategory]=useState(''),[assignee,setAssignee]=useState('');
+ const [assignmentBusy,setAssignmentBusy]=useState(false);
+ const labelFor=(a,b)=>ar?a:b;
+ const memberName=id=>routing.reportMembers.find(member=>member.id===id)?.name;
  const load=async()=>{setLoading(true);setError('');try{setData(await api('GET',`admin?kind=${encodeURIComponent(kind)}`))}catch(e){setError(e.message)}finally{setLoading(false)}};
  useEffect(()=>{load()},[kind,user.organization_id]);
+ useEffect(()=>{
+  if(kind!=='report')return;
+  let active=true;
+  intakeRequest('routing').then(result=>{if(active)setRouting(result)}).catch(()=>{});
+  return ()=>{active=false};
+ },[kind,user.organization_id]);
+ useEffect(()=>{
+  if(!caseId)return;
+  let active=true;
+  setDetail(null);setSelected(null);setError('');
+  intakeRequest('details?id='+encodeURIComponent(caseId)).then(result=>{
+   if(!active)return;
+   if(result.record.kind!==kind){setError('CASE_NOT_FOUND');return}
+   setSelected(result.record);setDetail(result);
+  }).catch(error=>{if(active)setError(error.message)});
+  return ()=>{active=false};
+ },[caseId,kind,user.organization_id]);
  const act=async(action)=>{setError('');setNotice('');try{await action();await load()}catch(e){setError(e.message)}};
  const createLink=()=>act(async()=>{
   const result=await api('POST','admin',{action:'create_link',kind,label:label.trim()||names[ar?'ar':'en'][kind]});
@@ -57,6 +73,16 @@ export default function IntakeDashboard({kind,user,ar}){
   setNotice(tr(copied?'أُنشئ الرابط ونُسخ: ':'أُنشئ الرابط. انسخه الآن: ')+result.url);
  });
  const open=async record=>{setSelected(record);setError('');try{setDetail(await api('GET',`details?id=${encodeURIComponent(record.id)}`))}catch(e){setError(e.message)}};
+ const closeDetail=()=>{setDetail(null);setSelected(null);if(caseId)onCloseCase()};
+ const assign=async recipient=>{
+  setAssignmentBusy(true);
+  try{
+   await act(async()=>{
+    await api('POST','routing',{action:'assign',caseId:detail.record.id,recipient,expected:detail.record.assignee_id||null});
+    setDetail(await api('GET','details?id='+encodeURIComponent(detail.record.id)));
+   });
+  }finally{setAssignmentBusy(false)}
+ };
  const updateStatus=value=>act(async()=>{
   const result=await api('PATCH','admin',{action:'status',caseId:selected.id,status:value});
   setNotice(tr(result.emailSent?'تم تحديث الحالة وإرسال تنبيه للموظف.':'تم تحديث الحالة، لكن تعذر إرسال التنبيه.'));
@@ -68,7 +94,7 @@ export default function IntakeDashboard({kind,user,ar}){
   act(async()=>{const result=await api('POST','admin',{action:'delete_case',caseId:selected.id});setDetail(null);setSelected(null);setNotice(tr(result.attachmentRemoved?'تم حذف البلاغ.':'تم حذف البلاغ، لكن تعذر حذف صورته من التخزين.'))});
  };
  const list=data.cases.filter(x=>x.kind===kind),links=data.links.filter(x=>x.kind===kind);
- const filtered=list.filter(x=>(!query||[x.reference,x.employee_name,x.employee_number,x.email,x.description].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))&&(!status||x.status===status)&&(!department||x.department===department)&&(!from||x.created_at.slice(0,10)>=from)&&(!to||x.created_at.slice(0,10)<=to));
+ const filtered=list.filter(x=>(!query||[x.reference,x.employee_name,x.employee_number,x.email,x.description].some(v=>String(v||'').toLowerCase().includes(query.toLowerCase())))&&(!category||x.category_id===category)&&(!assignee||(assignee==='unassigned'?!x.assignee_id:x.assignee_id===(assignee==='mine'?user.id:assignee)))&&(!status||x.status===status)&&(!department||x.department===department)&&(!from||x.created_at.slice(0,10)>=from)&&(!to||x.created_at.slice(0,10)<=to));
  return <div className={`work-page intake-dashboard ${error?'operations-load-error':''}`} dir={ar?'rtl':'ltr'}>
   <header className="work-heading operations-heading"><div className="operations-heading-copy"><span className="operations-heading-icon"><NavIcon name={kind}/></span><div><small>{user.organization_name}</small><h1>{names[ar?'ar':'en'][kind]}</h1><p>{tr(kind==='report'?'إدارة بلاغات الأعطال والمشكلات التقنية':'استقبال ومتابعة طلبات الأجهزة التقنية من الموظفين')}</p></div></div><button className="operations-refresh" onClick={load} disabled={loading}>{tr('تحديث')}</button></header>
   {error&&<p role="alert" className="work-error">{displayError(error)}</p>}{notice&&<p role="status" className="intake-notice">{notice}</p>}
@@ -76,11 +102,39 @@ export default function IntakeDashboard({kind,user,ar}){
   <section className="intake-admin-card operations-links"><div className="operations-section-head"><h2>{linkHeadings[ar?'ar':'en'][kind]}</h2><small>{links.length.toLocaleString(locale)}</small></div>{canManage&&<div className="intake-link-create"><input aria-label={tr('اسم الرابط')} placeholder={tr('اسم الرابط، مثل فرع الرياض')} value={label} maxLength={100} onChange={e=>setLabel(e.target.value)}/><button className="work-primary" onClick={createLink}>{tr('إنشاء رابط ونسخه')}</button></div>}
    {links.map(x=><div className="intake-link-row" key={x.id}><span><b>{x.label}</b><small>{formatDate(x.created_at)}</small><a className="intake-short-url" href={x.url} target="_blank" rel="noreferrer">{x.url}</a></span><button onClick={()=>navigator.clipboard.writeText(x.url).then(()=>setNotice(tr('تم نسخ الرابط'))).catch(()=>setNotice(x.url))}>{tr('نسخ الرابط')}</button>{canManage&&<button onClick={()=>act(async()=>{await api('PATCH','admin',{action:'link',id:x.id,active:!x.active});setNotice(tr(x.active?'تم تعطيل الرابط':'تم تفعيل الرابط'))})}>{tr(x.active?'تعطيل':'تفعيل')}</button>}<em>{tr(x.active?'نشط':'معطل')}</em></div>)}{!loading&&!links.length&&<p className="work-muted">{tr('لم تُنشأ روابط استقبال بعد.')}</p>}
   </section>
-  <div className="work-filters operations-filters"><input aria-label={tr('بحث')} placeholder={tr('بحث بالرقم أو الموظف أو الوصف')} value={query} onChange={e=>setQuery(e.target.value)}/><select aria-label={tr('الحالة')} value={status} onChange={e=>setStatus(e.target.value)}><option value="">{tr('كل الحالات')}</option>{statuses[kind].map(x=><option key={x} value={x}>{tr(x)}</option>)}</select><select aria-label={tr('القسم')} value={department} onChange={e=>setDepartment(e.target.value)}><option value="">{tr('كل الأقسام')}</option>{[...new Set(list.map(x=>x.department))].sort().map(x=><option key={x}>{x}</option>)}</select><label>{tr('من')}<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>{tr('إلى')}<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label><button onClick={()=>{setQuery('');setStatus('');setDepartment('');setFrom('');setTo('')}}>{tr('مسح')}</button></div>
+  <div className="work-filters operations-filters"><input aria-label={tr('بحث')} placeholder={tr('بحث بالرقم أو الموظف أو الوصف')} value={query} onChange={e=>setQuery(e.target.value)}/><select aria-label={tr('الحالة')} value={status} onChange={e=>setStatus(e.target.value)}><option value="">{tr('كل الحالات')}</option>{statuses[kind].map(x=><option key={x} value={x}>{tr(x)}</option>)}</select><select aria-label={tr('القسم')} value={department} onChange={e=>setDepartment(e.target.value)}><option value="">{tr('كل الأقسام')}</option>{[...new Set(list.map(x=>x.department))].sort().map(x=><option key={x}>{x}</option>)}</select><label>{tr('من')}<input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>{tr('إلى')}<input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>{kind==='report'&&<>
+   <select aria-label={labelFor('التصنيف','Category')} value={category} onChange={e=>setCategory(e.target.value)}>
+    <option value="">{labelFor('كل التصنيفات','All categories')}</option>
+    {routing.categories.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
+   </select>
+   <select aria-label={labelFor('الفني المكلف','Assigned technician')} value={assignee} onChange={e=>setAssignee(e.target.value)}>
+    <option value="">{labelFor('كل المسؤولين','All assignees')}</option>
+    <option value="unassigned">{labelFor('غير مسند','Unassigned')}</option>
+    <option value="mine">{labelFor('مسند إليّ','Assigned to me')}</option>
+    {routing.reportMembers.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
+   </select>
+  </>}<button onClick={()=>{setCategory('');setAssignee('');setQuery('');setStatus('');setDepartment('');setFrom('');setTo('')}}>{tr('مسح')}</button></div>
   <div className="work-grid operations-grid"><div className="operations-section-head"><h2>{names[ar?'ar':'en'][kind]}</h2><small>{filtered.length.toLocaleString(locale)} {tr('الإجمالي')}</small></div><div className="operations-table-scroll"><table><thead><tr><th>{tr('الرقم')}</th><th>{tr('الموظف')}</th><th>{tr('القسم')}</th><th>{tr(kind==='report'?'المشكلة':'الجهاز')}</th><th>{tr('الحالة')}</th><th>{tr('التاريخ')}</th><th>{tr('الإجراءات')}</th></tr></thead><tbody>{filtered.map(x=><tr key={x.id}><td><b>{x.reference}</b></td><td>{x.employee_name}</td><td>{x.department}</td><td>{x.issue_type||x.device_type}</td><td><span className={`work-badge status operations-status ${statusTone(x.status)}`}>{tr(x.status)}</span></td><td>{formatDate(x.created_at)}</td><td><button onClick={()=>open(x)}>{tr('عرض')}</button></td></tr>)}</tbody></table></div>{!loading&&!filtered.length&&!error&&<div className="operations-empty"><span className="operations-empty-icon"><NavIcon name={kind}/></span><h3>{tr(list.length?'لا توجد نتائج مطابقة للفلاتر.':kind==='report'?'لا توجد بلاغات حتى الآن':'لا توجد طلبات أجهزة حتى الآن')}</h3>{!list.length&&<p>{tr(kind==='report'?'أنشئ رابط استقبال البلاغات وشاركه مع الموظفين.':'أنشئ رابط استقبال طلبات الأجهزة وشاركه مع الموظفين.')}</p>}</div>}{loading&&<p className="work-empty">{tr('جارٍ التحميل…')}</p>}</div>
-  {detail&&<div className="work-overlay"><section className="work-details intake-details" role="dialog" aria-modal="true" aria-label={tr('تفاصيل الحالة')}><header><h2>{detail.record.reference}</h2><button onClick={()=>{setDetail(null);setSelected(null)}} aria-label={tr('إغلاق')}>×</button></header><dl>{[['الاسم',detail.record.employee_name],['الرقم الوظيفي',detail.record.employee_number],['البريد',detail.record.email],['القسم',detail.record.department],[kind==='report'?'نوع المشكلة':'نوع الجهاز',detail.record.issue_type||detail.record.device_type],['الوصف',detail.record.description]].map(([k,v])=><div key={k}><dt>{tr(k)}</dt><dd>{v}</dd></div>)}</dl>
+  {detail&&<div className="work-overlay"><section className="work-details intake-details" role="dialog" aria-modal="true" aria-label={tr('تفاصيل الحالة')}><header><h2>{detail.record.reference}</h2><button onClick={closeDetail} aria-label={tr('إغلاق')}>×</button></header><dl>{[['الاسم',detail.record.employee_name],['الرقم الوظيفي',detail.record.employee_number],['البريد',detail.record.email],['القسم',detail.record.department],[kind==='report'?'نوع المشكلة':'نوع الجهاز',detail.record.issue_type||detail.record.device_type],['الوصف',detail.record.description]].map(([k,v])=><div key={k}><dt>{tr(k)}</dt><dd>{v}</dd></div>)}</dl>
    {detail.imageUrl&&<div className="intake-image"><h3>{tr('الصورة المرفقة')}</h3><a href={detail.imageUrl} target="_blank" rel="noreferrer" aria-label={tr('فتح الصورة بحجمها الكامل')}><img src={detail.imageUrl} alt={`${tr('الصورة المرفقة')} ${detail.record.reference}`}/></a><a href={detail.imageUrl} target="_blank" rel="noreferrer">{tr('فتح الصورة بحجمها الكامل')}</a></div>}
    {detail.imageUnavailable&&<p role="alert" className="work-error">{tr('تعذر عرض الصورة حالياً. أعد فتح البلاغ لتجديد الرابط.')}</p>}
+   {kind==='report'&&<section className="intake-assignment">
+    <h3>{labelFor('إسناد البلاغ','Report assignment')}</h3>
+    <label>{labelFor('الفني المكلف','Assigned technician')}
+     <select disabled={!canManage||assignmentBusy} value={detail.record.assignee_id||''} onChange={e=>assign(e.target.value||null)}>
+      <option value="">{labelFor('غير مسند','Unassigned')}</option>
+      {detail.record.assignee_id&&!memberName(detail.record.assignee_id)&&
+       <option value={detail.record.assignee_id}>{detail.assignments?.[0]?.recipientName||labelFor('مستخدم غير مؤهل','Ineligible user')}</option>}
+      {routing.reportMembers.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
+     </select>
+    </label>
+    {detail.assignments?.length>0&&<details><summary>{labelFor('سجل الإسناد','Assignment history')}</summary>
+     {detail.assignments.map(row=><p key={row.id}>
+      {row.actorName||labelFor('عضو سابق','Former member')} · {row.details.to?(row.recipientName||labelFor('عضو سابق','Former member')):labelFor('إلغاء الإسناد','Unassigned')}
+      <br/><time dateTime={row.created_at}>{new Date(row.created_at).toLocaleString(locale)}</time>
+     </p>)}
+    </details>}
+   </section>}
    <label>{tr('الحالة')}<select value={detail.record.status} disabled={!canManage} onChange={e=>updateStatus(e.target.value)}>{statuses[kind].map(x=><option key={x} value={x}>{tr(x)}</option>)}</select></label><h3>{tr('الملاحظات والتغييرات')}</h3>{detail.notes.map(x=><p className="intake-note" key={x.id}><small>{new Date(x.created_at).toLocaleString(locale)}</small>{x.body}</p>)}{canManage&&<><textarea rows={3} maxLength={3000} placeholder={tr('ملاحظة داخلية')} value={note} onChange={e=>setNote(e.target.value)}/><button className="work-primary" disabled={!note.trim()} onClick={addNote}>{tr('إضافة ملاحظة')}</button></>}{kind==='report'&&user.role==='company_admin'&&<footer><button className="intake-delete" onClick={deleteReport}>{tr('حذف البلاغ')}</button></footer>}</section></div>}
  </div>;
 }

@@ -2,13 +2,19 @@
 const scriptSource = process.env.NODE_ENV === 'development'
   ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
   : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'";
+const isolated = process.env.VERCEL_ENV === 'preview' || process.env.NEXT_PUBLIC_INTAKE_ISOLATED === '1';
+const stageOrigin = 'https://bsxhmijczvsyidbgptfz.supabase.co';
+if (isolated && process.env.NEXT_PUBLIC_SUPABASE_URL !== stageOrigin) {
+  throw new Error('Intake Preview requires the isolated NetExpert staging database URL.');
+}
+const databaseOrigin = isolated ? stageOrigin : 'https://uycntpxrfbqtxydhsbbi.supabase.co';
 const contentSecurityPolicy = [
   "default-src 'self'",
   scriptSource,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://uycntpxrfbqtxydhsbbi.supabase.co",
-  "connect-src 'self' https://uycntpxrfbqtxydhsbbi.supabase.co wss://uycntpxrfbqtxydhsbbi.supabase.co",
+  "img-src 'self' data: blob: " + databaseOrigin,
+  "connect-src 'self' " + databaseOrigin + ' ' + databaseOrigin.replace('https:', 'wss:'),
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
@@ -18,6 +24,7 @@ const contentSecurityPolicy = [
 ].join('; ');
 
 module.exports = {
+  env: { NEXT_PUBLIC_INTAKE_ISOLATED: isolated ? '1' : '0' },
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {

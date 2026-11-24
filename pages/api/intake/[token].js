@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {serverClient,tokenHash,validateSubmission,sendCaseEmail} from '../../../lib/intake-server';
+import {deliverIntakeEmails,logIntakeDeliveryError} from '../../../lib/intake-notifications';
 
 export const config={api:{bodyParser:{sizeLimit:'5mb'}}};
 export default async function handler(req,res){
@@ -21,7 +22,12 @@ export default async function handler(req,res){
   const {data:link,error:linkError}=await (shortCode?lookup.eq('id',linkId):lookup.eq('token_hash',tokenHash(token))).maybeSingle();
   if(linkError)throw linkError;
   if(!link)return res.status(404).json({error:'LINK_UNAVAILABLE'});
-  if(req.method==='GET')return res.status(200).json({kind:link.kind,label:link.label});
+  if(req.method==='GET'){
+   const categories=link.kind==='report'?await db.from('intake_categories').select('id,name')
+    .eq('organization_id',link.organization_id).eq('active',true).order('name'):{data:[]};
+   if(categories.error)throw categories.error;
+   return res.status(200).json({kind:link.kind,label:link.label,categories:categories.data});
+  }
   const body=req.body||{};
   if(body.website)return res.status(400).json({error:'INVALID_SUBMISSION'});
   if(!validateSubmission(link.kind,body))return res.status(400).json({error:'INVALID_FIELDS'});
@@ -40,7 +46,7 @@ export default async function handler(req,res){
   const ipHash=createHash('sha256').update(`${process.env.INTAKE_RATE_LIMIT_SECRET}:${clientIp}`).digest('hex');
   const payload=Object.fromEntries(['employee_name','employee_number','email','department','issue_type','device_type','description'].map(key=>[key,String(body[key]||'').trim()]));
   const {data,error}=await db.rpc('submit_intake_case',{p_token_hash:link.token_hash,p_ip_hash:ipHash,p_data:payload});
-  if(error){if(/RATE_LIMITED/.test(error.message))return res.status(429).json({error:'RATE_LIMITED'});if(/LINK_UNAVAILABLE/.test(error.message))return res.status(404).json({error:'LINK_UNAVAILABLE'});throw error;}
+  if(error){if(/RATE_LIMITED/.test(error.message))return res.status(429).json({error:'RATE_LIMITED'});if(/LINK_UNAVAILABLE/.test(error.message))return res.status(404).json({error:'LINK_UNAVAILABLE'});if(/INVALID_CATEGORY/.test(error.message))return res.status(400).json({error:'INVALID_CATEGORY'});throw error;}
   const record=data?.[0];if(!record)throw new Error('Case creation returned no record');
   let attachmentSaved=true;
   if(image){
@@ -49,7 +55,10 @@ export default async function handler(req,res){
    if(uploaded.error){attachmentSaved=false;console.error('Intake image upload failed',{message:uploaded.error.message});}
    else await db.from('intake_cases').update({attachment_path:path}).eq('id',record.case_id).eq('organization_id',link.organization_id);
   }
-  const email=await sendCaseEmail({to:record.case_email,reference:record.case_reference,kind:record.case_kind,status:'جديد'}).catch(e=>{console.error('Confirmation email failed',{message:e.message});return {sent:false};});
+  const [email]=await Promise.all([
+   sendCaseEmail({to:record.case_email,reference:record.case_reference,kind:record.case_kind,status:'جديد'}).catch(()=>({sent:false})),
+   deliverIntakeEmails(db,link.organization_id,record.case_id).catch(logIntakeDeliveryError)
+  ]);
   return res.status(201).json({reference:record.case_reference,emailSent:email.sent,attachmentSaved});
  }catch(error){console.error('Public intake failed',{message:error.message,code:error.code});return res.status(500).json({error:'SUBMISSION_FAILED'});}
 }

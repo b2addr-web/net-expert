@@ -1,5 +1,6 @@
 import {serverClient} from '../../../lib/intake-server';
 import {runMonitorChecks,runSubscriptionAlerts} from '../../../lib/platform-jobs';
+import {deliverIntakeEmails,logIntakeDeliveryError} from '../../../lib/intake-notifications';
 
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
@@ -12,6 +13,7 @@ export default async function handler(req,res){
   const db=serverClient();
   const {data:authorized,error}=await db.rpc('verify_platform_job_token',{candidate});
   if(error||authorized!==true)return res.status(403).json({error:'NOT_AUTHORIZED'});
+  if(task==='monitor')await deliverIntakeEmails(db).catch(logIntakeDeliveryError);
   const result=task==='monitor'?await runMonitorChecks():await runSubscriptionAlerts();
   const {error:healthError}=await db.from('platform_job_runs').upsert({task,last_run_at:new Date().toISOString(),status:result.failed?'failed':'success',processed:result.processed??result.completed??0,error_code:result.failed?'PARTIAL_FAILURE':null});
   if(healthError)throw healthError;
