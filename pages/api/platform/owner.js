@@ -1,5 +1,5 @@
 import {createClient} from '@supabase/supabase-js';
-import {serverClient,validText} from '../../../lib/intake-server';
+import {validText} from '../../../lib/intake-server';
 import {ownerPortalEnabled} from '../../../lib/owner-portal-host';
 
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
@@ -37,7 +37,6 @@ export default async function handler(req,res){
  try{
   const bearer=req.headers.authorization?.match(/^Bearer (\S+)$/i)?.[1];
   if(!bearer)return res.status(403).json({error:'NOT_AUTHORIZED'});
-  const db=serverClient();
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const auth=createClient(url,key,{
@@ -45,14 +44,14 @@ export default async function handler(req,res){
    auth:{persistSession:false,autoRefreshToken:false}
   });
   const {data,error}=await auth.auth.getUser(bearer);
-  if(error||!data?.user)return res.status(403).json({error:'NOT_AUTHORIZED'});
-  const actor=data.user.id;
-  const owner=await db.from('commerce_owners').select('user_id').eq('user_id',actor).maybeSingle();
-  if(owner.error)throw owner.error;
-  if(!owner.data)return res.status(403).json({error:'NOT_AUTHORIZED'});
-  const assurance=await auth.auth.mfa.getAuthenticatorAssuranceLevel(bearer);
-  if(assurance.error)return res.status(403).json({error:'NOT_AUTHORIZED'});
-  const mfaRequired=assurance.data?.currentLevel!=='aal2';
+  const user=data?.user;
+  if(error||!user?.email_confirmed_at||user.app_metadata?.netexpert_identity!=='platform_owner'){
+   return res.status(403).json({error:'NOT_AUTHORIZED'});
+  }
+  const {data:access,error:accessError}=await auth.rpc('owner_portal_access');
+  if(accessError)throw accessError;
+  if(!access?.owner)return res.status(403).json({error:'NOT_AUTHORIZED'});
+  const mfaRequired=access.mfaRequired;
   if(req.method==='GET'&&req.query.mode==='access')return res.json({owner:true,mfaRequired});
   if(mfaRequired)return res.status(403).json({error:'MFA_REQUIRED'});
   if(req.method==='GET'){

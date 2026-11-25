@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {isOwnerPortalHost,ownerPortalEnabled} from '../lib/owner-portal-host.js';
+import {isOwnerPortalHost,ownerLoginAddress,ownerPortalEnabled} from '../lib/owner-portal-host.js';
+
+test('owner sign-in uses a separate Gmail identity without changing other addresses', () => {
+ assert.equal(ownerLoginAddress(' Owner.Sample@GMAIL.COM '),'owner.sample+netexpert-owner@gmail.com');
+ assert.equal(ownerLoginAddress('owner.sample+netexpert-owner@gmail.com'),'owner.sample+netexpert-owner@gmail.com');
+ assert.equal(ownerLoginAddress('qa@example.test'),'qa@example.test');
+});
 
 test('the owner portal is separated from company and deployment hosts in production', () => {
  const original=process.env.VERCEL_ENV;
