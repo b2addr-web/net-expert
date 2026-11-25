@@ -18,10 +18,13 @@ test('password recovery verifies the branded confirmation link before password u
 });
 
 test('browser Supabase configuration contains no server credential',async()=>{
-  const source=await read('../lib/supabase.js');
-  assert.match(source,/sb_publishable_/);
-  assert.doesNotMatch(source,/sb_secret_|SUPABASE_SERVICE_ROLE_KEY|service_role/);
-  assert.match(source,/isSupabaseConfigured/);
+  const [companyClient,config,ownerClient]=await Promise.all([
+    read('../lib/supabase.js'),read('../lib/supabase-browser-config.js'),read('../lib/commerce-client.js'),
+  ]);
+  assert.match(config,/sb_publishable_/);
+  assert.doesNotMatch(companyClient+config+ownerClient,/sb_secret_|SUPABASE_SERVICE_ROLE_KEY|service_role/);
+  assert.match(companyClient,/isSupabaseConfigured/);
+  assert.match(ownerClient,/storageKey:'netexpert-owner-session'/);
 });
 
 test('member removal does not delete the global auth identity',async()=>{
