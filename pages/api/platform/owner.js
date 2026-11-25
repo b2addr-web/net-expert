@@ -1,5 +1,6 @@
 import {createClient} from '@supabase/supabase-js';
 import {serverClient,validText} from '../../../lib/intake-server';
+import {ownerPortalEnabled} from '../../../lib/owner-portal-host';
 
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
 const integer=(value,min,max)=>Number.isInteger(value)&&value>=min&&value<=max;
@@ -28,6 +29,7 @@ function payload(body){
 
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
+ if(!ownerPortalEnabled(req.headers.host))return res.status(404).json({error:'NOT_FOUND'});
  if(!['GET','POST'].includes(req.method)){
   res.setHeader('Allow','GET, POST');
   return res.status(405).json({error:'METHOD_NOT_ALLOWED'});
@@ -42,11 +44,14 @@ export default async function handler(req,res){
   const {data,error}=await auth.auth.getUser(bearer);
   if(error||!data?.user)return res.status(403).json({error:'NOT_AUTHORIZED'});
   const actor=data.user.id;
-  if(req.method==='GET'&&req.query.mode==='access'){
-   const result=await db.from('commerce_owners').select('user_id').eq('user_id',actor).maybeSingle();
-   if(result.error)throw result.error;
-   return res.json({owner:Boolean(result.data)});
-  }
+  const owner=await db.from('commerce_owners').select('user_id').eq('user_id',actor).maybeSingle();
+  if(owner.error)throw owner.error;
+  if(!owner.data)return res.status(403).json({error:'NOT_AUTHORIZED'});
+  const assurance=await auth.auth.mfa.getAuthenticatorAssuranceLevel(bearer);
+  if(assurance.error)return res.status(403).json({error:'NOT_AUTHORIZED'});
+  const mfaRequired=assurance.data?.currentLevel!=='aal2';
+  if(req.method==='GET'&&req.query.mode==='access')return res.json({owner:true,mfaRequired});
+  if(mfaRequired)return res.status(403).json({error:'MFA_REQUIRED'});
   if(req.method==='GET'){
    const page=Number(req.query.page||0);
    if(!integer(page,0,100000))return res.status(400).json({error:'INVALID_FIELDS'});

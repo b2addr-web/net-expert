@@ -9,7 +9,7 @@ function HeaderIcon({name}){
  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{shapes[name]}</svg>;
 }
 
-export default function WorkspaceTopbar({ar,user,pageLabel,menu,workspaces,onSearch,onLanguage,onMenu,onMobileMenu,onWorkspace,onLogout,onLogoutAll,onOpenCase,onSettings,onOwner}){
+export default function WorkspaceTopbar({ar,user,pageLabel,menu,workspaces,onSearch,onLanguage,onMenu,onMobileMenu,onWorkspace,onLogout,onLogoutAll,onOpenCase,onSettings}){
  const initial=(user.name||user.email||'N').trim().slice(0,1).toUpperCase();
  return <header className="workspace-top enterprise-topbar">
   <div className="enterprise-topbar-start">
@@ -22,6 +22,6 @@ export default function WorkspaceTopbar({ar,user,pageLabel,menu,workspaces,onSea
    <button type="button" className="enterprise-language" onClick={onLanguage} aria-label={ar?'Change language':'تغيير اللغة'}>{ar?'EN':'ع'}</button>
    <button type="button" className="enterprise-account-trigger" onClick={onMenu} aria-expanded={menu} aria-haspopup="menu"><span className="enterprise-avatar">{initial}</span><span className="enterprise-account-name"><strong>{user.name||user.email}</strong><small>{user.email}</small></span><HeaderIcon name="chevron"/></button>
   </div>
-  {menu&&<div className="workspace-account enterprise-account-menu" role="menu"><strong>{user.name||user.email}</strong><small>{user.email}</small>{workspaces.length>1&&<label className="workspace-switch-label">{ar?'الشركة':'Workspace'}<select aria-label={ar?'اختيار مساحة العمل':'Select workspace'} value={user.organization_id} onChange={onWorkspace}>{workspaces.map(workspace=><option key={workspace.organization_id} value={workspace.organization_id}>{workspace.organization_name}</option>)}</select></label>}{onOwner&&<button type="button" onClick={onOwner}>{ar?'لوحة مالك المنصة':'Platform owner'}</button>}{user.role==='company_admin'&&<button type="button" onClick={onSettings}>{ar?'إعدادات الشركة':'Company settings'}</button>}<button type="button" onClick={()=>onLogout(false)}>{ar?'تسجيل الخروج':'Sign out'}</button><button type="button" onClick={()=>onLogoutAll(true)}>{ar?'إنهاء جميع الجلسات':'Sign out all sessions'}</button></div>}
+  {menu&&<div className="workspace-account enterprise-account-menu" role="menu"><strong>{user.name||user.email}</strong><small>{user.email}</small>{workspaces.length>1&&<label className="workspace-switch-label">{ar?'الشركة':'Workspace'}<select aria-label={ar?'اختيار مساحة العمل':'Select workspace'} value={user.organization_id} onChange={onWorkspace}>{workspaces.map(workspace=><option key={workspace.organization_id} value={workspace.organization_id}>{workspace.organization_name}</option>)}</select></label>}{user.role==='company_admin'&&<button type="button" onClick={onSettings}>{ar?'إعدادات الشركة':'Company settings'}</button>}<button type="button" onClick={()=>onLogout(false)}>{ar?'تسجيل الخروج':'Sign out'}</button><button type="button" onClick={()=>onLogoutAll(true)}>{ar?'إنهاء جميع الجلسات':'Sign out all sessions'}</button></div>}
  </header>;
 }

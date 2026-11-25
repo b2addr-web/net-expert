@@ -17,6 +17,7 @@ import { AuthProvider } from '../components/AuthContext';
 import { ThemeProvider } from '../components/ThemeContext';
 
 export default function App({ Component, pageProps }) {
+  if (Component.ownerPortal) return <ThemeProvider><Component {...pageProps} /></ThemeProvider>;
   return (
     <ThemeProvider>
       <AuthProvider>
