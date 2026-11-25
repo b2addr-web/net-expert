@@ -40,7 +40,10 @@ export default async function handler(req,res){
   const db=serverClient();
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const auth=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+  const auth=createClient(url,key,{
+   global:{headers:{Authorization:'Bearer '+bearer}},
+   auth:{persistSession:false,autoRefreshToken:false}
+  });
   const {data,error}=await auth.auth.getUser(bearer);
   if(error||!data?.user)return res.status(403).json({error:'NOT_AUTHORIZED'});
   const actor=data.user.id;
@@ -55,17 +58,17 @@ export default async function handler(req,res){
   if(req.method==='GET'){
    const page=Number(req.query.page||0);
    if(!integer(page,0,100000))return res.status(400).json({error:'INVALID_FIELDS'});
-   const result=await db.rpc('commerce_dashboard',{p_actor:actor,p_page:page});
+   const result=await auth.rpc('owner_portal_dashboard',{p_page:page});
    if(result.error)throw result.error;
    return res.json(result.data);
   }
   const body=req.body||{},dataToSave=payload(body);
   if(!dataToSave)return res.status(400).json({error:'INVALID_FIELDS'});
-  const result=await db.rpc('commerce_update',{p_actor:actor,p_action:body.action,p_data:dataToSave});
+  const result=await auth.rpc('owner_portal_update',{p_action:body.action,p_data:dataToSave});
   if(result.error)throw result.error;
   return res.json({ok:true});
  }catch(error){
-  if(error.message==='NOT_AUTHORIZED')return res.status(403).json({error:error.message});
+  if(['NOT_AUTHORIZED','MFA_REQUIRED'].includes(error.message))return res.status(403).json({error:error.message});
   if(error.message==='COMPANY_NOT_FOUND')return res.status(404).json({error:error.message});
   if(error.code==='23505')return res.status(409).json({error:'DUPLICATE_RECEIPT'});
   if(['LIMIT_BELOW_ALLOCATED','INVALID_EXTENSION','INVALID_PAID_PLAN','INVALID_TRIAL','INVALID_RECEIPT'].includes(error.message)){
